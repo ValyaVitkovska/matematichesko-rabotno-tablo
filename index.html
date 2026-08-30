@@ -98,6 +98,10 @@ canvas{background:#fff;box-shadow:var(--shadow);touch-action:none;max-width:100%
 .resize-handle{position:absolute;width:18px;height:18px;right:-9px;bottom:-9px;border-radius:50%;background:#5b4bdb;border:3px solid white;box-shadow:0 1px 5px rgba(0,0,0,.25);cursor:nwse-resize}
 .crop-box{position:absolute;border:2px dashed #dc2626;background:rgba(255,255,255,.12);pointer-events:none;z-index:25}
 .selection-box{position:absolute;border:2px dashed #5b4bdb;background:rgba(91,75,219,.08);pointer-events:none;z-index:30}
+.geo-obj-toolbar{position:absolute;z-index:26;display:flex;gap:4px;align-items:center;background:#fff;padding:4px;border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 12px rgba(31,41,55,.12);white-space:nowrap;touch-action:none}
+.geo-obj-toolbar input[type=color]{width:28px;height:26px;padding:1px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer}
+.geo-obj-toolbar button{padding:5px 7px;font-size:12px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer}
+.geo-obj-toolbar button:hover{background:#f8faff;border-color:#b9c4d4}
 .toast{position:fixed;right:18px;bottom:18px;z-index:100;background:#1f2937;color:white;padding:10px 13px;border-radius:10px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.2);max-width:340px}
 
 
@@ -734,8 +738,12 @@ function drawTriangleType(type){
     A={x:cx-w*.10,y:cy-h*.28};B={x:cx-w*.29,y:cy+h*.24};C={x:cx+w*.27,y:cy+h*.18};
   }
   lastTriangle={A:{...A},B:{...B},C:{...C}};
+  const triMeta={role:'triangle'};
+  if(type==='equilateral'){triMeta.triShape='equilateral';}
+  else if(type==='isosceles'){triMeta.triShape='isosceles';triMeta.apexIndex=0;}
+  else if(type==='right'||type==='rightiso'){triMeta.triShape='right';triMeta.rightIndex=0;}
   if(window.GeometryEngine && window.GeometryEngine.createLabeledPolygon){
-    window.GeometryEngine.createLabeledPolygon([A,B,C],['A','B','C'],{role:'triangle'});
+    window.GeometryEngine.createLabeledPolygon([A,B,C],['A','B','C'],triMeta);
     return;
   }
   ctx.save();styleStroke();
@@ -767,8 +775,12 @@ function drawQuad(type){
   }else{
     P=[{x:cx-w*.23,y:cy-h*.22},{x:cx+w*.25,y:cy-h*.12},{x:cx+w*.19,y:cy+h*.24},{x:cx-w*.30,y:cy+h*.16}];
   }
+  let quadMeta={role:'quadrilateral'};
+  if(type==='square'||type==='rectangle') quadMeta={role:'quadrilateral',shape:'rectangle'};
+  else if(type==='parallelogram') quadMeta={role:'quadrilateral',shape:'parallelogram'};
+  else if(type==='trapezoid'||type==='isotrapezoid') quadMeta={role:'quadrilateral',shape:'trapezoid'};
   if(window.GeometryEngine && window.GeometryEngine.createLabeledPolygon){
-    window.GeometryEngine.createLabeledPolygon(P,['A','B','C','D'],{role:'quadrilateral'});
+    window.GeometryEngine.createLabeledPolygon(P,['A','B','C','D'],quadMeta);
     return;
   }
   ctx.save();styleStroke();ctx.beginPath();ctx.moveTo(P[0].x,P[0].y);
@@ -1677,6 +1689,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     svg.style.left=(cr.left-wr.left+wrap.scrollLeft)+'px';
     svg.style.top=(cr.top-wr.top+wrap.scrollTop)+'px';
     svg.style.width=cr.width+'px';svg.style.height=cr.height+'px';
+    if(typeof updateObjectToolbar==='function')updateObjectToolbar();
   }
 
   function serializeObjects(){
@@ -1808,7 +1821,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
       c.classList.add('geometry-handle');
       if((o.type==='circle'||o.type==='ellipse')&&i===0)c.classList.add('center-handle');
       if((o.type==='circle'||o.type==='ellipse')&&i>0)c.classList.add('radius-handle');
-      c.setAttribute('r','14');c.dataset.index=i;o.g.appendChild(c);o.handles.push(c);
+      c.setAttribute('r','10');c.dataset.index=i;o.g.appendChild(c);o.handles.push(c);
 
       let drag=false,last=null;
       c.addEventListener('pointerdown',e=>{
@@ -1829,6 +1842,114 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
           o.points[1]={x:np.x,y:o.points[0].y}; // horizontal radius handle
         }else if(o.type==='ellipse'&&i===2){
           o.points[2]={x:o.points[0].x,y:np.y}; // vertical radius handle
+        }else if(o.type==='polygon'&&o.points.length===4&&o.meta&&o.meta.shape==='rectangle'){
+          // Rectangle: dragging one corner only resizes the rectangle (keeps right angles).
+          // The opposite corner stays fixed; each adjacent corner keeps sharing the axis
+          // (x or y) it shared with the dragged corner before the drag.
+          const EPS=0.5;
+          o.points[i]=np;
+          shiftAttachedLabels(o,np.x-old.x,np.y-old.y,i);
+          [(i+1)%4,(i+3)%4].forEach(ni=>{
+            const n=o.points[ni],oldNx=n.x,oldNy=n.y;
+            if(Math.abs(n.y-old.y)<EPS) n.y=np.y;
+            else if(Math.abs(n.x-old.x)<EPS) n.x=np.x;
+            shiftAttachedLabels(o,n.x-oldNx,n.y-oldNy,ni);
+          });
+        }else if(o.type==='polygon'&&o.points.length===4&&o.meta&&o.meta.shape==='parallelogram'){
+          // Parallelogram: dragging one corner keeps both pairs of sides parallel.
+          // Its two neighbors stay fixed; the opposite corner is recomputed so the
+          // diagonals keep bisecting each other (classic parallelogram law).
+          const n1i=(i+1)%4,n2i=(i+3)%4,oppI=(i+2)%4;
+          const n1=o.points[n1i],n2=o.points[n2i],opp=o.points[oppI];
+          o.points[i]=np;
+          shiftAttachedLabels(o,np.x-old.x,np.y-old.y,i);
+          const nx=n1.x+n2.x-np.x, ny=n1.y+n2.y-np.y;
+          shiftAttachedLabels(o,nx-opp.x,ny-opp.y,oppI);
+          opp.x=nx;opp.y=ny;
+        }else if(o.type==='polygon'&&o.points.length===4&&o.meta&&o.meta.shape==='trapezoid'){
+          // Trapezoid: whichever side was horizontal (the parallel pair) stays horizontal;
+          // the slanted legs stay free, so only that one neighbor's y is kept in sync.
+          const EPS=0.5;
+          o.points[i]=np;
+          shiftAttachedLabels(o,np.x-old.x,np.y-old.y,i);
+          [(i+1)%4,(i+3)%4].forEach(ni=>{
+            const n=o.points[ni];
+            if(Math.abs(n.y-old.y)<EPS){
+              const oldNy=n.y;n.y=np.y;shiftAttachedLabels(o,0,n.y-oldNy,ni);
+            }
+          });
+        }else if(o.type==='polygon'&&o.points.length===3&&o.meta&&o.meta.triShape==='equilateral'){
+          // Equilateral triangle: dragging any vertex only resizes it (uniform scale from
+          // the centroid, along that vertex's own direction) - the angles never change.
+          const cen={x:(o.points[0].x+o.points[1].x+o.points[2].x)/3,y:(o.points[0].y+o.points[1].y+o.points[2].y)/3};
+          const ov={x:old.x-cen.x,y:old.y-cen.y};
+          const oldDist=Math.hypot(ov.x,ov.y)||1;
+          const dv={x:np.x-cen.x,y:np.y-cen.y};
+          const proj=(dv.x*ov.x+dv.y*ov.y)/oldDist;
+          const scale=Math.max(20,proj)/oldDist;
+          o.points.forEach((p,idx)=>{
+            const nx=cen.x+(p.x-cen.x)*scale, ny=cen.y+(p.y-cen.y)*scale;
+            shiftAttachedLabels(o,nx-p.x,ny-p.y,idx);
+            p.x=nx;p.y=ny;
+          });
+        }else if(o.type==='polygon'&&o.points.length===3&&o.meta&&o.meta.triShape==='isosceles'){
+          // Isosceles triangle: the two legs from the apex always stay equal length;
+          // both the apex angle and the base angles are free to change.
+          const apexI=o.meta.apexIndex||0;
+          if(i===apexI){
+            // Apex can only slide along the base's perpendicular bisector (keeps legs equal).
+            const others=[0,1,2].filter(k=>k!==apexI);
+            const P1=o.points[others[0]],P2=o.points[others[1]];
+            const mid={x:(P1.x+P2.x)/2,y:(P1.y+P2.y)/2};
+            let perp={x:-(P2.y-P1.y),y:(P2.x-P1.x)};
+            const L=Math.hypot(perp.x,perp.y)||1;perp.x/=L;perp.y/=L;
+            const t=(np.x-mid.x)*perp.x+(np.y-mid.y)*perp.y;
+            const cst={x:mid.x+perp.x*t,y:mid.y+perp.y*t};
+            o.points[i]=cst;
+            shiftAttachedLabels(o,cst.x-old.x,cst.y-old.y,i);
+          }else{
+            // Dragging a base vertex: move it freely, then rescale the other base vertex
+            // (along its own direction from the apex) so both legs stay equal length.
+            const otherI=[0,1,2].find(k=>k!==apexI&&k!==i);
+            const apex=o.points[apexI],other=o.points[otherI];
+            o.points[i]=np;
+            shiftAttachedLabels(o,np.x-old.x,np.y-old.y,i);
+            const newLeg=Math.hypot(np.x-apex.x,np.y-apex.y);
+            const ov2={x:other.x-apex.x,y:other.y-apex.y};
+            const oldOtherLen=Math.hypot(ov2.x,ov2.y)||1;
+            const nx=apex.x+ov2.x/oldOtherLen*newLeg, ny=apex.y+ov2.y/oldOtherLen*newLeg;
+            shiftAttachedLabels(o,nx-other.x,ny-other.y,otherI);
+            other.x=nx;other.y=ny;
+          }
+        }else if(o.type==='polygon'&&o.points.length===3&&o.meta&&o.meta.triShape==='right'){
+          // Right triangle: the marked vertex always keeps its 90° angle; the other two
+          // angles are free to change.
+          const rightI=o.meta.rightIndex||0;
+          const others=[0,1,2].filter(k=>k!==rightI);
+          if(i===rightI){
+            // The right-angle vertex can only move on the circle whose diameter is the
+            // segment between the other two (fixed) vertices - Thales' theorem.
+            const P1=o.points[others[0]],P2=o.points[others[1]];
+            const cen={x:(P1.x+P2.x)/2,y:(P1.y+P2.y)/2};
+            const r=Math.hypot(P2.x-P1.x,P2.y-P1.y)/2||1;
+            let dvec={x:np.x-cen.x,y:np.y-cen.y};
+            const L=Math.hypot(dvec.x,dvec.y)||1;
+            const cst={x:cen.x+dvec.x/L*r,y:cen.y+dvec.y/L*r};
+            o.points[i]=cst;
+            shiftAttachedLabels(o,cst.x-old.x,cst.y-old.y,i);
+          }else{
+            // Dragging a leg vertex: it can only slide on the line through the right-angle
+            // vertex that stays perpendicular to the other (fixed) leg.
+            const R=o.points[rightI];
+            const otherI=others.find(k=>k!==i);
+            const M=o.points[otherI];
+            let perp={x:-(M.y-R.y),y:(M.x-R.x)};
+            const L=Math.hypot(perp.x,perp.y)||1;perp.x/=L;perp.y/=L;
+            const t=(np.x-R.x)*perp.x+(np.y-R.y)*perp.y;
+            const cst={x:R.x+perp.x*t,y:R.y+perp.y*t};
+            o.points[i]=cst;
+            shiftAttachedLabels(o,cst.x-old.x,cst.y-old.y,i);
+          }
         }else{
           o.points[i]=np;
           shiftAttachedLabels(o,np.x-old.x,np.y-old.y,i);
@@ -1989,14 +2110,12 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   function startObjectDrag(e,o){
     if(mode==='intersection'){e.stopPropagation();e.preventDefault();chooseForIntersection(o);return;}
     selectedId=o.id;refreshSelection();
-    if(mode!=='move'){
-      if(mode==='point'){
-        geoSpeech.textContent='Хванете цветна характерна точка, а не страната на фигурата.';
-      }else{
-        geoSpeech.textContent='За цялата фигура натиснете „Премести цял обект“, а за една точка – „Мести точка / връх“.';
-      }
+    if(mode==='point'){
+      geoSpeech.textContent='Хванете цветна характерна точка, а не страната на фигурата.';
       return;
     }
+    // In every other mode a click on the shape both selects it and lets you drag it
+    // right away - no need to first press "Премести цял обект".
     e.stopPropagation();e.preventDefault();
     let last=pt(e);
     o.shape.setPointerCapture(e.pointerId);
@@ -2058,6 +2177,65 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     updateIntersectionsForObject(o.id);
   }
 
+  // ---------- Quick toolbar on the selected object: change its color or delete it ----------
+  let objToolbarEl=null;
+  function removeObjectToolbar(){ if(objToolbarEl){objToolbarEl.remove();objToolbarEl=null;} }
+  function ensureObjectToolbar(){
+    if(objToolbarEl)return;
+    objToolbarEl=document.createElement('div');
+    objToolbarEl.className='geo-obj-toolbar';
+    objToolbarEl.innerHTML='<input type="color" title="Цвят на фигурата"><button type="button" data-act="del" title="Изтрий фигурата">🗑</button>';
+    objToolbarEl.addEventListener('pointerdown',e=>e.stopPropagation());
+    objToolbarEl.addEventListener('click',e=>e.stopPropagation());
+    const colorInput=objToolbarEl.querySelector('input[type=color]');
+    colorInput.addEventListener('input',()=>{
+      const o=objects.find(x=>x.id===selectedId);if(!o)return;
+      o.color=colorInput.value;
+      o.shape.setAttribute('stroke',o.color);
+      if(o.type==='vector'&&o.extra)o.extra.setAttribute('fill',o.color);
+      sync();
+    });
+    colorInput.addEventListener('change',()=>{sync();B.pushHistory();});
+    objToolbarEl.querySelector('[data-act="del"]').addEventListener('click',()=>deleteSelectedObject());
+    wrap.appendChild(objToolbarEl);
+  }
+  function updateObjectToolbar(){
+    if(!selectedId){removeObjectToolbar();return;}
+    const o=objects.find(x=>x.id===selectedId);
+    if(!o||!o.shape){removeObjectToolbar();return;}
+    ensureObjectToolbar();
+    const colorInput=objToolbarEl.querySelector('input[type=color]');
+    if(document.activeElement!==colorInput)colorInput.value=o.color;
+    const bbox=o.shape.getBBox();
+    const cr=canvas.getBoundingClientRect(),wr=wrap.getBoundingClientRect();
+    const sx=cr.width/canvas.width,sy=cr.height/canvas.height;
+    const left=cr.left-wr.left+wrap.scrollLeft+bbox.x*sx;
+    const top=cr.top-wr.top+wrap.scrollTop+bbox.y*sy;
+    objToolbarEl.style.left=left+'px';
+    objToolbarEl.style.top=Math.max(0,top-38)+'px';
+  }
+  function deleteSelectedObject(){
+    const o=objects.find(x=>x.id===selectedId);
+    if(!o)return;
+    if(!confirm('Да изтрия ли тази фигура?'))return;
+    const page=B.getCurrentPage&&B.getCurrentPage();
+    if(page){
+      const ids=new Set(o.labelIds||[]);
+      page.labels=(page.labels||[]).filter(l=>!ids.has(l.id));
+      if(window.BoardAddon&&window.BoardAddon.loadLabels)window.BoardAddon.loadLabels(page.labels||[]);
+    }
+    intersections=intersections.filter(it=>{
+      if(it.parents.includes(o.id)){clearIntersectionDom(it);return false;}
+      return true;
+    });
+    if(o.g)o.g.remove();
+    objects=objects.filter(x=>x!==o);
+    selectedId=null;
+    refreshSelection();
+    sync();B.pushHistory();
+    toast('Фигурата е изтрита.');
+  }
+
   function refreshSelection(){
     objects.forEach(o=>{
       const sel=o.id===selectedId;
@@ -2065,6 +2243,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
       o.g.classList.toggle('intersection-choice',mode==='intersection'&&intersectionSelection.includes(o.id));
       o.handles.forEach(h=>h.classList.toggle('hidden-geo-handle',!(mode==='point'&&sel)));
     });
+    updateObjectToolbar();
   }
 
   function setMode(next){
@@ -2225,7 +2404,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
       if(d(a,b)>8){createObject(tool,[a,b]);B.pushHistory();}
     }else if(tool==='rect'){
       if(Math.abs(b.x-a.x)>8&&Math.abs(b.y-a.y)>8)
-        createLabeledPolygon([{x:a.x,y:a.y},{x:b.x,y:a.y},{x:b.x,y:b.y},{x:a.x,y:b.y}],['A','B','C','D'],{role:'quadrilateral'});
+        createLabeledPolygon([{x:a.x,y:a.y},{x:b.x,y:a.y},{x:b.x,y:b.y},{x:a.x,y:b.y}],['A','B','C','D'],{role:'quadrilateral',shape:'rectangle'});
     }else if(tool==='circle'){
       if(d(a,b)>8){createObject('circle',[a,b],{meta:{role:'circle'}});B.pushHistory();}
     }else if(tool==='midsegment'){
