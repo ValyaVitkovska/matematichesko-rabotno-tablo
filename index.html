@@ -1960,7 +1960,17 @@ function updateDraftPreview(){ensurePolygonLayer();if(previewPolyline){previewPo
     const lx=V.x+Math.cos(mid)*(r+23),ly=V.y+Math.sin(mid)*(r+23)-22;
     ctx.restore();
     createMovableLabel('α',lx,ly,'angle',B.getColor(),22);
-    B.pushHistory();anglePts=[];toast('Ъгълът е означен. Надписът α може да се мести и преименува.');
+    B.pushHistory();anglePts=[];
+    // Marking an angle turns on "angle-marking" mode (body.angle-marking) so that
+    // clicks pass through shapes/labels while picking the vertex and the two legs.
+    // That mode was never turned back off once the angle was actually drawn, which
+    // left every label - including the α just created - stuck with
+    // pointer-events:none (see the "body.angle-marking .movable-label" CSS rule),
+    // so it couldn't be dragged or double-clicked to rename until some other tool
+    // happened to be selected afterwards. Turn it off now that there's nothing left
+    // to click through for.
+    setAngleMarkingActive(false);
+    toast('Ъгълът е означен. Надписът α може да се мести и преименува.');
   }
 
   canvas.addEventListener('pointerdown',e=>{
