@@ -132,6 +132,9 @@ canvas{background:#fff;box-shadow:var(--shadow);touch-action:none;max-width:100%
   pointer-events:stroke;cursor:pointer;fill:none;stroke-linejoin:round;stroke-linecap:round;
 }
 .geometry-object.selected .geo-shape{filter:drop-shadow(0 0 2px rgba(91,75,219,.5))}
+.geometry-layer.picking-point .geo-shape{pointer-events:none}
+.right-angle-layer{pointer-events:none}
+.right-angle-mark{fill:none;stroke-width:3;pointer-events:none}
 .geometry-handle{
   pointer-events:all;cursor:grab;fill:#14aeb4;stroke:#fff;stroke-width:4;
   filter:drop-shadow(0 1px 2px rgba(0,0,0,.25));
@@ -229,10 +232,6 @@ canvas{background:#fff;box-shadow:var(--shadow);touch-action:none;max-width:100%
     <button data-triangle="isosceles">Равнобедрен</button>
     <button data-triangle="scalene">Разностранен</button>
     <button data-triangle="right">Правоъгълен</button>
-    <button data-triangle="rightiso">Правоъг. равнобедрен</button>
-    <button data-triangle="acute">Остроъгълен</button>
-    <button data-triangle="obtuse">Тъпоъгълен</button>
-    <button id="freeTriangle">△ Произволен</button>
   </div>
 </div>
 </details>
@@ -337,6 +336,23 @@ canvas{background:#fff;box-shadow:var(--shadow);touch-action:none;max-width:100%
   <div class="hint" style="margin-top:7px">
     „Премести цял обект“ освобождава място, като мести фигурата без да променя формата ѝ. „Мести точка / връх“ показва характерните точки: краища на отсечка/вектор, две точки на права, върхове на многоъгълник, център и точка от окръжността. При окръжност центърът я мести, а другата точка променя радиуса. „Пресечна точка“: изберете последователно два обекта; точката/точките се построяват автоматично и следват фигурите при преместване.<br>
     Означенията A, B, C, M, O, I, T, α… се местят отделно с плъзгане. Двоен щрак ги преименува.
+  </div>
+</div>
+</details>
+
+<details class="group" open>
+<summary>Построения върху фигура</summary>
+<div class="group-body">
+  <div class="grid2">
+    <button data-construct="median">Медиана</button>
+    <button data-construct="altitude">Височина</button>
+    <button data-construct="bisector">Ъглополовяща</button>
+    <button data-construct="perp">⊥ Перпендикуляр</button>
+    <button data-construct="parallel">∥ Успоредна права</button>
+    <button data-construct="midpoint" class="wide">• Среда на отсечка</button>
+  </div>
+  <div class="hint" style="margin-top:7px">
+    Медиана/височина/ъглополовяща/перпендикуляр/успоредна: кликнете върху цветна точка (връх), после върху отсечка или страна. „Среда на отсечка“ – кликнете направо върху отсечката. Построеното остава свързано и се преизчислява, ако преместите изходната фигура.
   </div>
 </div>
 </details>
@@ -717,31 +733,25 @@ document.getElementById('redoBtn').addEventListener('click',()=>{
 });
 
 function drawTriangleType(type){
+  // Convention: the first vertex (A) is always the bottom-left one, so students see a
+  // consistent, predictable labeling regardless of triangle type.
   const w=canvas.width,h=canvas.height,cx=w/2,cy=h/2;
   let A,B,C;
   if(type==='equilateral'){
     const s=Math.min(w,h)*0.48,hh=s*Math.sqrt(3)/2;
-    A={x:cx,y:cy-hh/2};B={x:cx-s/2,y:cy+hh/2};C={x:cx+s/2,y:cy+hh/2};
+    A={x:cx-s/2,y:cy+hh/2};B={x:cx+s/2,y:cy+hh/2};C={x:cx,y:cy-hh/2};
   }else if(type==='isosceles'){
-    A={x:cx,y:cy-h*.28};B={x:cx-w*.23,y:cy+h*.24};C={x:cx+w*.23,y:cy+h*.24};
+    A={x:cx-w*.23,y:cy+h*.24};B={x:cx+w*.23,y:cy+h*.24};C={x:cx,y:cy-h*.28};
   }else if(type==='scalene'){
-    A={x:cx-w*.13,y:cy-h*.28};B={x:cx-w*.29,y:cy+h*.23};C={x:cx+w*.25,y:cy+h*.19};
-  }else if(type==='right'){
+    A={x:cx-w*.29,y:cy+h*.23};B={x:cx+w*.25,y:cy+h*.19};C={x:cx-w*.13,y:cy-h*.28};
+  }else{ // 'right'
     A={x:cx-w*.22,y:cy+h*.23};B={x:cx-w*.22,y:cy-h*.25};C={x:cx+w*.27,y:cy+h*.23};
-  }else if(type==='rightiso'){
-    A={x:cx-w*.22,y:cy+h*.23};B={x:cx-w*.22,y:cy-h*.23};C={x:cx+w*.24,y:cy+h*.23};
-  }else if(type==='acute'){
-    A={x:cx,y:cy-h*.28};B={x:cx-w*.27,y:cy+h*.22};C={x:cx+w*.25,y:cy+h*.22};
-  }else if(type==='obtuse'){
-    A={x:cx-w*.22,y:cy-h*.12};B={x:cx-w*.31,y:cy+h*.22};C={x:cx+w*.29,y:cy+h*.22};
-  }else{
-    A={x:cx-w*.10,y:cy-h*.28};B={x:cx-w*.29,y:cy+h*.24};C={x:cx+w*.27,y:cy+h*.18};
   }
   lastTriangle={A:{...A},B:{...B},C:{...C}};
   const triMeta={role:'triangle'};
   if(type==='equilateral'){triMeta.triShape='equilateral';}
-  else if(type==='isosceles'){triMeta.triShape='isosceles';triMeta.apexIndex=0;}
-  else if(type==='right'||type==='rightiso'){triMeta.triShape='right';triMeta.rightIndex=0;}
+  else if(type==='isosceles'){triMeta.triShape='isosceles';triMeta.apexIndex=2;}
+  else if(type==='right'){triMeta.triShape='right';triMeta.rightIndex=0;}
   if(window.GeometryEngine && window.GeometryEngine.createLabeledPolygon){
     window.GeometryEngine.createLabeledPolygon([A,B,C],['A','B','C'],triMeta);
     return;
@@ -753,7 +763,6 @@ function drawTriangleType(type){
   pushHistory();
 }
 document.querySelectorAll('[data-triangle]').forEach(b=>b.addEventListener('click',()=>drawTriangleType(b.dataset.triangle)));
-document.getElementById('freeTriangle').addEventListener('click',()=>drawTriangleType('general'));
 
 function drawQuad(type){
   const w=canvas.width,h=canvas.height,cx=w/2,cy=h/2;
@@ -1652,15 +1661,21 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   const moveBtn=document.getElementById('selectRegionBtn');
   const rasterBtn=document.getElementById('moveRasterBtn');
   const intersectionBtn=document.getElementById('intersectionBtn');
+  const constructBtns={};
+  document.querySelectorAll('[data-construct]').forEach(b=>{constructBtns[b.dataset.construct]=b;});
+  const CONSTRUCT_KINDS=new Set(['median','altitude','bisector','perp','parallel','midpoint']);
+  const CONSTRUCT_POINT_KINDS=new Set(['median','altitude','bisector','perp','parallel']);
+  const CONSTRUCT_LABELS={median:'медиана',altitude:'височина',bisector:'ъглополовяща',perp:'перпендикуляр',parallel:'успоредна права',midpoint:'среда на отсечка'};
 
   let svg=null, objects=[], selectedId=null;
-  let mode='none'; // none | point | move
+  let mode='none'; // none | point | move | intersection | median | altitude | bisector | perp | parallel | midpoint
   let draft=null, draftEl=null;
   let smartRaw=[];
   let polyDraft=[];
   let polyPreview=null;
   let intersections=[];
   let intersectionSelection=[];
+  let pendingConstructPoint=null;
 
   function toast(msg){
     const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);
@@ -1708,10 +1723,12 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   function sync(){
     const p=B.getCurrentPage&&B.getCurrentPage();
     if(p){p.objects=serializeObjects();p.intersections=serializeIntersections();}
+    refreshRightAngleMarkers();
   }
   function clearDom(){
     if(svg)svg.innerHTML='';
     objects=[];selectedId=null;draft=null;draftEl=null;polyDraft=[];polyPreview=null;intersections=[];intersectionSelection=[];
+    rightAngleGroup=null;
   }
 
   function labelById(id){
@@ -1825,7 +1842,9 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
 
       let drag=false,last=null;
       c.addEventListener('pointerdown',e=>{
+        if(CONSTRUCT_POINT_KINDS.has(mode)){e.stopPropagation();e.preventDefault();choosePointForConstruction(o,i);return;}
         if(mode!=='point')return;
+        if(o.meta&&o.meta.derived){geoSpeech.textContent='Тази фигура е построена автоматично и върховете ѝ не могат да се местят.';return;}
         selectedId=o.id;refreshSelection();drag=true;last={...o.points[i]};
         c.classList.add('dragging');c.setPointerCapture(e.pointerId);e.stopPropagation();e.preventDefault();
       });
@@ -1983,6 +2002,102 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     }
     return[];
   }
+  function midpoint(a,b){return{x:(a.x+b.x)/2,y:(a.y+b.y)/2};}
+  function footOnLine(P,A,Bp){
+    const v=sub(Bp,A),L2=v.x*v.x+v.y*v.y;
+    if(L2<1e-9)return{...A};
+    const t=((P.x-A.x)*v.x+(P.y-A.y)*v.y)/L2;
+    return{x:A.x+v.x*t,y:A.y+v.y*t};
+  }
+  function bisectorFoot(P,A,Bp){
+    const pa=d(P,A),pb=d(P,Bp),s=pa+pb;
+    if(s<1e-9)return{...A};
+    return{x:(pb*A.x+pa*Bp.x)/s,y:(pb*A.y+pa*Bp.y)/s};
+  }
+  function distToSegment(p,a,b){
+    const v=sub(b,a),L2=v.x*v.x+v.y*v.y;
+    if(L2<1e-9)return d(p,a);
+    let t=((p.x-a.x)*v.x+(p.y-a.y)*v.y)/L2;
+    t=Math.max(0,Math.min(1,t));
+    return d(p,{x:a.x+v.x*t,y:a.y+v.y*t});
+  }
+  function nearestEdgeIndex(o,p){
+    const pieces=linearPieces(o);
+    if(!pieces.length)return null;
+    let bi=0,bd=Infinity;
+    pieces.forEach((piece,i)=>{const dd=distToSegment(p,piece.a,piece.b);if(dd<bd){bd=dd;bi=i;}});
+    return bi;
+  }
+  function resolvePoint(ref){
+    const o=objects.find(x=>x.id===ref.objId);
+    if(!o||!o.points[ref.index])return null;
+    return o.points[ref.index];
+  }
+  function resolveLineEndpoints(ref){
+    const o=objects.find(x=>x.id===ref.objId);
+    if(!o)return null;
+    const piece=linearPieces(o)[ref.edgeIndex];
+    if(!piece)return null;
+    return{A:piece.a,B:piece.b};
+  }
+
+  // ---------- Automatic right-angle indicators ----------
+  // Whenever two connected sides of a triangle/quadrilateral meet at ~90°, or a
+  // constructed altitude/perpendicular meets its reference line, draw the small
+  // right-angle square there. Fully derived - nothing here is saved; it is
+  // recomputed from the live object data every time sync() runs.
+  let rightAngleGroup=null;
+  function ensureRightAngleGroup(){
+    if(!svg)return null;
+    if(!rightAngleGroup){
+      rightAngleGroup=document.createElementNS('http://www.w3.org/2000/svg','g');
+      rightAngleGroup.classList.add('right-angle-layer');
+      svg.appendChild(rightAngleGroup);
+    }
+    return rightAngleGroup;
+  }
+  function addRightAngleMark(group,vertex,u1,u2,color){
+    const size=16;
+    const p1={x:vertex.x+u1.x*size,y:vertex.y+u1.y*size};
+    const p3={x:vertex.x+u2.x*size,y:vertex.y+u2.y*size};
+    const p2={x:p1.x+u2.x*size,y:p1.y+u2.y*size};
+    const el=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+    el.setAttribute('points',`${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`);
+    el.setAttribute('class','right-angle-mark');
+    el.setAttribute('stroke',color||'#1f2937');
+    group.appendChild(el);
+  }
+  function angleDirsAndDeg(vertex,nb1,nb2){
+    const d1=sub(nb1,vertex),d2=sub(nb2,vertex);
+    const L1=Math.hypot(d1.x,d1.y),L2=Math.hypot(d2.x,d2.y);
+    if(L1<1e-6||L2<1e-6)return null;
+    const u1={x:d1.x/L1,y:d1.y/L1},u2={x:d2.x/L2,y:d2.y/L2};
+    const cosv=Math.max(-1,Math.min(1,u1.x*u2.x+u1.y*u2.y));
+    return{u1,u2,deg:Math.acos(cosv)*180/Math.PI};
+  }
+  function refreshRightAngleMarkers(){
+    const group=ensureRightAngleGroup();
+    if(!group)return;
+    group.innerHTML='';
+    const EPS=2;
+    objects.forEach(o=>{
+      if(o.type==='polygon'&&o.points.length>=3){
+        const n=o.points.length;
+        for(let i=0;i<n;i++){
+          const info=angleDirsAndDeg(o.points[i],o.points[(i-1+n)%n],o.points[(i+1)%n]);
+          if(info&&Math.abs(info.deg-90)<=EPS)addRightAngleMark(group,o.points[i],info.u1,info.u2,o.color);
+        }
+      }else if(o.meta&&o.meta.derived&&(o.meta.derived.kind==='altitude'||o.meta.derived.kind==='perp')){
+        const line=resolveLineEndpoints(o.meta.derived.line);
+        const P=o.points[0];
+        if(!line||!P)return;
+        const foot=footOnLine(P,line.A,line.B);
+        const info=angleDirsAndDeg(foot,P,line.B);
+        if(info)addRightAngleMark(group,foot,info.u1,info.u2,o.color);
+      }
+    });
+    svg.appendChild(group); // keep it painted on top of every shape
+  }
   function intersectLinearLinear(L1,L2){
     const p=L1.a,r=sub(L1.b,L1.a),q=L2.a,s=sub(L2.b,L2.a);
     const den=cross(r,s),qp=sub(q,p),eps=1e-8;
@@ -2049,7 +2164,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     return Array.from({length:n},(_,i)=>'P'+String.fromCharCode(0x2081+i));
   }
   function serializeIntersections(){
-    return intersections.map(it=>({id:it.id,parents:[...it.parents],names:[...(it.names||[])],offsets:(it.offsets||[]).map(o=>({x:o.x,y:o.y}))}));
+    return intersections.map(it=>({id:it.id,parents:[...it.parents],names:[...(it.names||[])],offsets:(it.offsets||[]).map(o=>({x:o.x,y:o.y})),kind:it.kind,edgeIndex:it.edgeIndex}));
   }
   function clearIntersectionDom(it){
     (it.groups||[]).forEach(g=>g.remove());it.groups=[];
@@ -2075,6 +2190,12 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     it.lastPoints=points.map(p=>({...p}));
   }
   function recomputeIntersection(it,quiet=true){
+    if(it.kind==='midpoint'){
+      const line=resolveLineEndpoints({objId:it.parents[0],edgeIndex:it.edgeIndex});
+      if(!line){clearIntersectionDom(it);return;}
+      createIntersectionDom(it,[midpoint(line.A,line.B)]);
+      return;
+    }
     const a=objects.find(o=>o.id===it.parents[0]),b=objects.find(o=>o.id===it.parents[1]);
     if(!a||!b){clearIntersectionDom(it);return;}
     const result=intersectObjects(a,b);
@@ -2089,7 +2210,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   function loadIntersections(list){
     intersections=[];intersectionSelection=[];
     (list||[]).forEach(data=>{
-      const it={id:data.id||('int_'+uuid()),parents:[...(data.parents||[])],names:[...(data.names||[])],offsets:(data.offsets||[]).map(o=>({x:o.x,y:o.y})),groups:[],lastPoints:[]};
+      const it={id:data.id||('int_'+uuid()),parents:[...(data.parents||[])],names:[...(data.names||[])],offsets:(data.offsets||[]).map(o=>({x:o.x,y:o.y})),kind:data.kind,edgeIndex:data.edgeIndex,groups:[],lastPoints:[]};
       intersections.push(it);recomputeIntersection(it,true);
     });
   }
@@ -2107,11 +2228,87 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     sync();refreshSelection();
   }
 
+  // ---------- Construction tools: median / altitude / bisector / perpendicular / parallel / midpoint ----------
+  function buildMidpointConstruction(objId,edgeIndex){
+    const line=resolveLineEndpoints({objId,edgeIndex});
+    if(!line){toast('Възникна грешка при построяването.');return;}
+    const it={id:'int_'+uuid(),kind:'midpoint',parents:[objId],edgeIndex,names:['M'],offsets:[{x:12,y:-18}],groups:[],lastPoints:[]};
+    intersections.push(it);recomputeIntersection(it,false);
+    if(!it.groups.length){intersections=intersections.filter(x=>x!==it);toast('Неуспешно построяване.');return;}
+    toast('Средата е построена.');
+    sync();B.pushHistory();refreshSelection();
+  }
+  function buildDirectionalConstruction(kind,pointRef,lineRef){
+    pendingConstructPoint=null;
+    const P=resolvePoint(pointRef),line=lineRef&&resolveLineEndpoints(lineRef);
+    if(!P||!line){toast('Възникна грешка при построяването.');refreshSelection();return;}
+    if(kind==='median'||kind==='altitude'||kind==='bisector'){
+      let F;
+      if(kind==='median')F=midpoint(line.A,line.B);
+      else if(kind==='altitude')F=footOnLine(P,line.A,line.B);
+      else F=bisectorFoot(P,line.A,line.B);
+      if(d(P,F)<3){toast('Точката вече лежи върху тази страна – изберете друга.');refreshSelection();return;}
+      createObject('segment',[{x:P.x,y:P.y},F],{meta:{derived:{kind,point:{...pointRef},line:{...lineRef}}}});
+    }else if(kind==='perp'||kind==='parallel'){
+      let dir=sub(line.B,line.A);
+      if(kind==='perp')dir={x:-dir.y,y:dir.x};
+      const L=Math.hypot(dir.x,dir.y)||1,ux=dir.x/L,uy=dir.y/L,half=200;
+      const pts=[{x:P.x-ux*half,y:P.y-uy*half},{x:P.x+ux*half,y:P.y+uy*half}];
+      createObject('line',pts,{meta:{derived:{kind,point:{...pointRef},line:{...lineRef}}}});
+    }else return;
+    B.pushHistory();
+    toast('Построено: '+(CONSTRUCT_LABELS[kind]||kind)+'.');
+    if(mode===kind)geoSpeech.textContent='Кликнете върху нова точка (връх), за да продължите построяването на '+(CONSTRUCT_LABELS[kind]||'')+'.';
+  }
+  function choosePointForConstruction(o,index){
+    pendingConstructPoint={objId:o.id,index};
+    selectedId=o.id;refreshSelection();
+    geoSpeech.textContent='Точката е избрана. Сега кликнете върху отсечка или страна.';
+  }
+  function chooseLineForConstruction(o,clickPoint){
+    const edgeIndex=nearestEdgeIndex(o,clickPoint);
+    if(edgeIndex===null){toast('Тази фигура няма права страна, подходяща за тази конструкция.');return;}
+    if(mode==='midpoint'){buildMidpointConstruction(o.id,edgeIndex);return;}
+    if(!pendingConstructPoint){
+      geoSpeech.textContent='Първо кликнете върху цветна точка (връх), после върху отсечка/страна.';
+      return;
+    }
+    buildDirectionalConstruction(mode,pendingConstructPoint,{objId:o.id,edgeIndex});
+  }
+  function recomputeDerivedObject(o){
+    const der=o.meta&&o.meta.derived;
+    if(!der)return;
+    const P=resolvePoint(der.point),line=resolveLineEndpoints(der.line);
+    if(!P||!line)return;
+    if(der.kind==='median'||der.kind==='altitude'||der.kind==='bisector'){
+      let F;
+      if(der.kind==='median')F=midpoint(line.A,line.B);
+      else if(der.kind==='altitude')F=footOnLine(P,line.A,line.B);
+      else F=bisectorFoot(P,line.A,line.B);
+      o.points=[{x:P.x,y:P.y},F];
+    }else if(der.kind==='perp'||der.kind==='parallel'){
+      let dir=sub(line.B,line.A);
+      if(der.kind==='perp')dir={x:-dir.y,y:dir.x};
+      const L=Math.hypot(dir.x,dir.y)||1,ux=dir.x/L,uy=dir.y/L,half=200;
+      o.points=[{x:P.x-ux*half,y:P.y-uy*half},{x:P.x+ux*half,y:P.y+uy*half}];
+    }
+  }
+  function updateDerivedForObject(id){
+    objects.filter(o=>o.meta&&o.meta.derived&&(o.meta.derived.point.objId===id||o.meta.derived.line.objId===id)).forEach(o=>{
+      recomputeDerivedObject(o);render(o);
+    });
+  }
+
   function startObjectDrag(e,o){
     if(mode==='intersection'){e.stopPropagation();e.preventDefault();chooseForIntersection(o);return;}
+    if(CONSTRUCT_KINDS.has(mode)){e.stopPropagation();e.preventDefault();chooseLineForConstruction(o,pt(e));return;}
     selectedId=o.id;refreshSelection();
     if(mode==='point'){
       geoSpeech.textContent='Хванете цветна характерна точка, а не страната на фигурата.';
+      return;
+    }
+    if(o.meta&&o.meta.derived){
+      geoSpeech.textContent='Тази фигура е построена автоматично от друга и не може да се мести отделно – преместете изходната фигура или я изтрийте.';
       return;
     }
     // In every other mode a click on the shape both selects it and lets you drag it
@@ -2175,6 +2372,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     });
     refreshSelection();
     updateIntersectionsForObject(o.id);
+    updateDerivedForObject(o.id);
   }
 
   // ---------- Quick toolbar on the selected object: change its color or delete it ----------
@@ -2214,22 +2412,30 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     objToolbarEl.style.left=left+'px';
     objToolbarEl.style.top=Math.max(0,top-38)+'px';
   }
-  function deleteSelectedObject(){
-    const o=objects.find(x=>x.id===selectedId);
+  function cascadeDeleteObject(id){
+    const o=objects.find(x=>x.id===id);
     if(!o)return;
-    if(!confirm('Да изтрия ли тази фигура?'))return;
+    const dependents=objects.filter(x=>x.meta&&x.meta.derived&&(x.meta.derived.point.objId===id||x.meta.derived.line.objId===id));
+    dependents.forEach(dep=>cascadeDeleteObject(dep.id));
     const page=B.getCurrentPage&&B.getCurrentPage();
     if(page){
       const ids=new Set(o.labelIds||[]);
       page.labels=(page.labels||[]).filter(l=>!ids.has(l.id));
-      if(window.BoardAddon&&window.BoardAddon.loadLabels)window.BoardAddon.loadLabels(page.labels||[]);
     }
     intersections=intersections.filter(it=>{
-      if(it.parents.includes(o.id)){clearIntersectionDom(it);return false;}
+      if(it.parents.includes(id)){clearIntersectionDom(it);return false;}
       return true;
     });
     if(o.g)o.g.remove();
     objects=objects.filter(x=>x!==o);
+  }
+  function deleteSelectedObject(){
+    const o=objects.find(x=>x.id===selectedId);
+    if(!o)return;
+    if(!confirm('Да изтрия ли тази фигура?'))return;
+    cascadeDeleteObject(o.id);
+    const page=B.getCurrentPage&&B.getCurrentPage();
+    if(page&&window.BoardAddon&&window.BoardAddon.loadLabels)window.BoardAddon.loadLabels(page.labels||[]);
     selectedId=null;
     refreshSelection();
     sync();B.pushHistory();
@@ -2237,17 +2443,24 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   }
 
   function refreshSelection(){
+    const showAllHandles=CONSTRUCT_POINT_KINDS.has(mode);
     objects.forEach(o=>{
       const sel=o.id===selectedId;
       o.g.classList.toggle('selected',sel);
       o.g.classList.toggle('intersection-choice',mode==='intersection'&&intersectionSelection.includes(o.id));
-      o.handles.forEach(h=>h.classList.toggle('hidden-geo-handle',!(mode==='point'&&sel)));
+      o.handles.forEach(h=>h.classList.toggle('hidden-geo-handle',!((mode==='point'&&sel)||showAllHandles)));
     });
+    // While awaiting the "point" pick of a median/altitude/bisector/perpendicular/parallel
+    // construction, make shape strokes non-interactive so a vertex handle sitting on top of
+    // another object's line (e.g. several constructions sharing the same vertex) always wins
+    // the click - otherwise whichever shape happens to be topmost in the SVG can shadow it.
+    if(svg)svg.classList.toggle('picking-point',showAllHandles&&!pendingConstructPoint);
+    Object.entries(constructBtns).forEach(([kind,btn])=>btn.classList.toggle('active',mode===kind));
     updateObjectToolbar();
   }
 
   function setMode(next){
-    mode=next;intersectionSelection=[];
+    mode=next;intersectionSelection=[];pendingConstructPoint=null;
     moveBtn.classList.toggle('active',mode==='move');
     editBtn.classList.toggle('active',mode==='point');
     intersectionBtn.classList.toggle('active',mode==='intersection');
@@ -2261,6 +2474,12 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     }else if(mode==='intersection'){
       moveBtn.textContent='✥ Премести цял обект';editBtn.textContent='◆ Мести точка / връх';intersectionBtn.textContent='✓ Избери 2 обекта';
       geoSpeech.textContent='Щракнете последователно върху два обекта. Ще построя пресечната им точка или точки.';
+    }else if(mode==='midpoint'){
+      moveBtn.textContent='✥ Премести цял обект';editBtn.textContent='◆ Мести точка / връх';intersectionBtn.textContent='⊗ Пресечна точка';
+      geoSpeech.textContent='Кликнете върху отсечка или страна на фигура – ще построя точка в средата ѝ.';
+    }else if(CONSTRUCT_POINT_KINDS.has(mode)){
+      moveBtn.textContent='✥ Премести цял обект';editBtn.textContent='◆ Мести точка / връх';intersectionBtn.textContent='⊗ Пресечна точка';
+      geoSpeech.textContent='Кликнете върху цветна точка (връх) – тя определя откъде тръгва '+(CONSTRUCT_LABELS[mode]||'построението')+'. После кликнете върху отсечка или страна.';
     }else{
       moveBtn.textContent='✥ Премести цял обект';editBtn.textContent='◆ Мести точка / връх';intersectionBtn.textContent='⊗ Пресечна точка';
     }
@@ -2269,6 +2488,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   function toggleMoveMode(){setMode(mode==='move'?'none':'move');}
   function togglePointMode(){setMode(mode==='point'?'none':'point');}
   function toggleIntersectionMode(){setMode(mode==='intersection'?'none':'intersection');}
+  function toggleConstructMode(kind){setMode(mode===kind?'none':kind);}
 
   function updateLast(o){
     if(o.meta&&o.meta.role==='triangle'&&o.points.length>=3){
@@ -2515,13 +2735,16 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   moveBtn.addEventListener('click',()=>{rasterBtn.classList.remove('active');});
   editBtn.addEventListener('click',()=>{rasterBtn.classList.remove('active');});
   intersectionBtn.addEventListener('click',()=>{rasterBtn.classList.remove('active');toggleIntersectionMode();});
+  Object.entries(constructBtns).forEach(([kind,btn])=>{
+    btn.addEventListener('click',()=>{rasterBtn.classList.remove('active');toggleConstructMode(kind);});
+  });
 
   window.addEventListener('resize',updateLayer);
   wrap.addEventListener('scroll',updateLayer);
 
   window.GeometryEngine={
     serializeObjects,serializeIntersections,loadObjects,createObject,createLabeledPolygon,
-    toggleMoveMode,togglePointMode,toggleIntersectionMode,setMode,addPolygonVertex,finishPolygon,intersectObjects
+    toggleMoveMode,togglePointMode,toggleIntersectionMode,toggleConstructMode,setMode,addPolygonVertex,finishPolygon,intersectObjects
   };
 
   // Load current page. Legacy polygons migrate automatically.
