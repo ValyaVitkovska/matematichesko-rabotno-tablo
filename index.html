@@ -240,7 +240,9 @@ body.angle-marking .movable-label{pointer-events:none}
 .geometry-layer.picking-point .geometry-handle:not(.hidden-geo-handle){
   fill:#ff8f00 !important;stroke:#fff;stroke-width:3;
   filter:drop-shadow(0 0 7px rgba(255,143,0,.95)) drop-shadow(0 0 2px rgba(255,143,0,1));
-  animation:pickPointPulse 1s ease-in-out infinite;
+  /* Pulse a few times to catch the eye, then hold still in the bright color - blinking
+     forever after the construction is already built is just distracting. */
+  animation:pickPointPulse 0.9s ease-in-out 3;
 }
 .geometry-layer.picking-line .geo-shape{
   stroke:#ff8f00 !important;stroke-width:6 !important;
