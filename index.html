@@ -204,6 +204,7 @@ canvas{background:#fff;box-shadow:var(--shadow);touch-action:none;max-width:100%
 .right-angle-layer{pointer-events:none}
 .right-angle-mark{fill:none;stroke-width:3;pointer-events:none}
 .measure-layer{pointer-events:none}
+.angle-draft-layer{pointer-events:none}
 .measure-label{font:italic 15px Georgia,'Times New Roman',serif;pointer-events:none;text-anchor:middle;dominant-baseline:middle;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
 .geometry-handle{
   pointer-events:all;cursor:grab;fill:#14aeb4;stroke:#fff;stroke-width:2.5;
@@ -1454,6 +1455,7 @@ function updateDraftPreview(){ensurePolygonLayer();if(previewPolyline){previewPo
 
   function setCustomTool(t){
     customTool=t;anglePts=[];
+    if(typeof clearAngleDraft==='function')clearAngleDraft();
     B.setTool(t);
     document.querySelectorAll('[data-tool]').forEach(b=>b.classList.remove('active'));
     document.getElementById('moveRasterBtn').classList.toggle('active',t==='select');
@@ -1468,7 +1470,8 @@ function updateDraftPreview(){ensurePolygonLayer();if(previewPolyline){previewPo
 
   document.querySelectorAll('[data-tool], [data-triangle], [data-quad]').forEach(el=>{
     el.addEventListener('click',()=>{
-      customTool=null;
+      customTool=null;anglePts=[];
+      if(typeof clearAngleDraft==='function')clearAngleDraft();
       document.getElementById('moveRasterBtn').classList.remove('active');
       document.getElementById('angleBtn').classList.remove('active');
     });
@@ -1620,7 +1623,93 @@ function updateDraftPreview(){ensurePolygonLayer();if(previewPolyline){previewPo
     geoSpeech.textContent='Избраната част вече е подвижна. Преместете я, променете размера и натиснете „Закрепи“.';
   }
 
+  // ---- Angle tool: snap clicks to existing vertices/edges so the arc lands exactly on
+  // the shape's real sides instead of requiring pixel-perfect freehand clicks. Falls back
+  // to the raw click when nothing is nearby, so marking a fully freehand angle still works. ----
+  function angleObjEdges(o){
+    if(!o||!o.points)return[];
+    if(['segment','vector','line','ray'].includes(o.type))return o.points.length>=2?[{a:o.points[0],b:o.points[1]}]:[];
+    if(o.type==='polygon'||o.type==='polyline'){
+      const arr=[];
+      for(let i=0;i<o.points.length-1;i++)arr.push({a:o.points[i],b:o.points[i+1]});
+      if(o.type==='polygon'&&o.points.length>2)arr.push({a:o.points[o.points.length-1],b:o.points[0]});
+      return arr;
+    }
+    return[];
+  }
+  function angleDistToSeg(p,a,b){
+    const vx=b.x-a.x,vy=b.y-a.y,L2=vx*vx+vy*vy;
+    if(L2<1e-9)return Math.hypot(p.x-a.x,p.y-a.y);
+    let t=((p.x-a.x)*vx+(p.y-a.y)*vy)/L2;
+    t=Math.max(0,Math.min(1,t));
+    return Math.hypot(p.x-(a.x+vx*t), p.y-(a.y+vy*t));
+  }
+  function angleCurrentObjects(){
+    const page=B.getCurrentPage&&B.getCurrentPage();
+    return (page&&page.objects)||[];
+  }
+  function snapAngleVertex(raw){
+    const TOL=26;let best=null,bestD=TOL;
+    angleCurrentObjects().forEach(o=>{
+      (o.points||[]).forEach(p=>{
+        const dd=Math.hypot(raw.x-p.x,raw.y-p.y);
+        if(dd<bestD){bestD=dd;best={x:p.x,y:p.y};}
+      });
+    });
+    return best||raw;
+  }
+  function snapAngleLeg(V,raw){
+    const TOL=20;let best=null,bestD=TOL;
+    angleCurrentObjects().forEach(o=>{
+      angleObjEdges(o).forEach(seg=>{
+        const dd=angleDistToSeg(raw,seg.a,seg.b);
+        if(dd<bestD){
+          bestD=dd;
+          const da=Math.hypot(V.x-seg.a.x,V.y-seg.a.y), db=Math.hypot(V.x-seg.b.x,V.y-seg.b.y);
+          best=da>=db?{x:seg.a.x,y:seg.a.y}:{x:seg.b.x,y:seg.b.y};
+        }
+      });
+    });
+    return best||raw;
+  }
+  let angleDraftGroup=null;
+  function ensureAngleDraftGroup(){
+    const svg=document.querySelector('.geometry-layer');
+    if(!svg)return null;
+    if(!angleDraftGroup||!angleDraftGroup.isConnected){
+      angleDraftGroup=document.createElementNS('http://www.w3.org/2000/svg','g');
+      angleDraftGroup.setAttribute('class','angle-draft-layer');
+      svg.appendChild(angleDraftGroup);
+    }
+    return angleDraftGroup;
+  }
+  function showAngleDraft(){
+    const g=ensureAngleDraftGroup();
+    if(!g)return;
+    g.innerHTML='';
+    const color=B.getColor?B.getColor():'#5b4bdb';
+    anglePts.forEach((p,i)=>{
+      if(i>0){
+        const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+        ln.setAttribute('x1',anglePts[0].x);ln.setAttribute('y1',anglePts[0].y);
+        ln.setAttribute('x2',p.x);ln.setAttribute('y2',p.y);
+        ln.setAttribute('stroke',color);ln.setAttribute('stroke-width','2');
+        ln.setAttribute('stroke-dasharray','6 5');ln.setAttribute('opacity','.75');
+        g.appendChild(ln);
+      }
+      const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+      c.setAttribute('cx',p.x);c.setAttribute('cy',p.y);c.setAttribute('r',i===0?7:5.5);
+      c.setAttribute('fill',i===0?color:'#fff');
+      c.setAttribute('stroke',color);c.setAttribute('stroke-width','2');
+      g.appendChild(c);
+    });
+  }
+  function clearAngleDraft(){
+    if(angleDraftGroup)angleDraftGroup.innerHTML='';
+  }
+
   function drawAngle(){
+    clearAngleDraft();
     if(anglePts.length<3)return;
     const V=anglePts[0],A=anglePts[1],C=anglePts[2],r=70;
     const a1=Math.atan2(A.y-V.y,A.x-V.x),a2=Math.atan2(C.y-V.y,C.x-V.x);
@@ -1648,10 +1737,20 @@ function updateDraftPreview(){ensurePolygonLayer();if(previewPolyline){previewPo
       e.preventDefault();e.stopImmediatePropagation();selecting=true;selStart=canvasPoint(e);
       drawSelectionBox(selStart,selStart);canvas.setPointerCapture(e.pointerId);
     }else if(customTool==='angle'){
-      e.preventDefault();e.stopImmediatePropagation();anglePts.push(canvasPoint(e));
-      if(anglePts.length===1)toast('Сега посочете точка от първото рамо.');
-      else if(anglePts.length===2)toast('Сега посочете точка от второто рамо.');
-      else drawAngle();
+      e.preventDefault();e.stopImmediatePropagation();
+      const raw=canvasPoint(e);
+      if(anglePts.length===0){
+        anglePts.push(snapAngleVertex(raw));
+        showAngleDraft();
+        toast('Сега посочете точка от първото рамо (кликнете направо върху страната – ще се захване автоматично).');
+      }else if(anglePts.length===1){
+        anglePts.push(snapAngleLeg(anglePts[0],raw));
+        showAngleDraft();
+        toast('Сега посочете точка от второто рамо.');
+      }else{
+        anglePts.push(snapAngleLeg(anglePts[0],raw));
+        drawAngle();
+      }
     }
   },true);
   canvas.addEventListener('pointermove',e=>{
