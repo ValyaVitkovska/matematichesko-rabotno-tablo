@@ -3066,7 +3066,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     if(objToolbarEl)return;
     objToolbarEl=document.createElement('div');
     objToolbarEl.className='geo-obj-toolbar';
-    objToolbarEl.innerHTML='<input type="color" title="Цвят на фигурата"><button type="button" data-act="dash" title="Плътна / пунктирана линия">┄</button><button type="button" data-act="del" title="Изтрий фигурата">🗑</button>';
+    objToolbarEl.innerHTML='<input type="color" title="Цвят на фигурата"><button type="button" data-act="dash" title="Плътна / пунктирана линия">┄</button><button type="button" data-act="center" title="Покажи/скрий центъра на окръжността" hidden>⊙ Център</button><button type="button" data-act="del" title="Изтрий фигурата">🗑</button>';
     objToolbarEl.addEventListener('pointerdown',e=>e.stopPropagation());
     objToolbarEl.addEventListener('click',e=>e.stopPropagation());
     const colorInput=objToolbarEl.querySelector('input[type=color]');
@@ -3085,8 +3085,35 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
       updateObjectToolbar();
       sync();B.pushHistory();
     });
+    objToolbarEl.querySelector('[data-act="center"]').addEventListener('click',()=>{
+      const o=objects.find(x=>x.id===selectedId);if(!o)return;
+      toggleCircleCenterLabel(o);
+    });
     objToolbarEl.querySelector('[data-act="del"]').addEventListener('click',()=>deleteSelectedObject());
     wrap.appendChild(objToolbarEl);
+  }
+  // Marks (or un-marks) the center of a circle/ellipse with a small movable point label,
+  // the same way the circumscribed/inscribed circle of a triangle already gets its "O"/"I"
+  // center point. Reuses labelIds[0] (already tracked for every object) so the mark moves
+  // together with the shape - dragging the whole circle or its center handle shifts it via
+  // the existing shiftAttachedLabels() calls, while resizing (the radius handle) leaves it in place.
+  function toggleCircleCenterLabel(o){
+    if(!window.BoardAddon||!window.BoardAddon.createMovableLabel)return;
+    const page=B.getCurrentPage&&B.getCurrentPage();
+    if(!page)return;
+    const existingId=(o.labelIds||[])[0];
+    const existing=existingId&&(page.labels||[]).find(l=>l.id===existingId);
+    if(existing){
+      page.labels=(page.labels||[]).filter(l=>l.id!==existingId);
+      o.labelIds[0]=null;
+      if(window.BoardAddon.loadLabels)window.BoardAddon.loadLabels(page.labels||[]);
+    }else{
+      const c=o.points[0];
+      const lab=window.BoardAddon.createMovableLabel('O',c.x+10,c.y-18,'point',o.color,22);
+      o.labelIds[0]=lab.id;
+    }
+    sync();B.pushHistory();
+    updateObjectToolbar();
   }
   function updateObjectToolbar(){
     if(!selectedId){removeObjectToolbar();return;}
@@ -3097,6 +3124,18 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     if(document.activeElement!==colorInput)colorInput.value=o.color;
     const dashBtn=objToolbarEl.querySelector('[data-act="dash"]');
     if(dashBtn)dashBtn.classList.toggle('active',!!o.dashed);
+    const centerBtn=objToolbarEl.querySelector('[data-act="center"]');
+    if(centerBtn){
+      const isCircleLike=o.type==='circle'||o.type==='ellipse';
+      centerBtn.hidden=!isCircleLike;
+      if(isCircleLike){
+        const page=B.getCurrentPage&&B.getCurrentPage();
+        const centerId=(o.labelIds||[])[0];
+        const hasCenter=!!(centerId&&page&&(page.labels||[]).some(l=>l.id===centerId));
+        centerBtn.classList.toggle('active',hasCenter);
+        centerBtn.textContent=hasCenter?'⊙ Скрий център':'⊙ Център';
+      }
+    }
     const bbox=o.shape.getBBox();
     const cr=canvas.getBoundingClientRect(),wr=wrap.getBoundingClientRect();
     const sx=cr.width/canvas.width,sy=cr.height/canvas.height;
