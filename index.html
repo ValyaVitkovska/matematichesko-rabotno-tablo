@@ -15,6 +15,7 @@
   --bg:#eef3f8; --panel:#fff; --ink:#1f2937; --muted:#64748b;
   --line:#d8e0ea; --accent:#5b4bdb; --accent2:#eef0ff; --danger:#b42318;
   --shadow:0 8px 24px rgba(31,41,55,.10);
+  --accent-rgb:91,75,219; --danger-rgb:180,35,24; --ink-rgb:31,41,55;
 }
 *{box-sizing:border-box}
 body{
@@ -30,14 +31,68 @@ header{
   min-width:200px; flex:1; max-width:360px; padding:8px 10px; border:1px solid var(--line);
   border-radius:9px; font-size:14px; outline:none;
 }
-button,select,.btn{
+select,.btn.flat{
   border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:9px;
   padding:8px 9px; font-size:13px; cursor:pointer;
 }
-button:hover{background:#f8faff;border-color:#b9c4d4}
-button.active{background:var(--accent2);border-color:var(--accent);color:#3f35a5;font-weight:700}
-button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
-button.danger{color:var(--danger)}
+/* ---- 3D glossy buttons ---- */
+button,.btn{
+  --tint-rgb:var(--ink-rgb);
+  border:1px solid rgba(0,0,0,.14); border-radius:10px;
+  color:var(--ink); padding:9px 10px; font-size:13px; cursor:pointer;
+  background:
+    linear-gradient(160deg, rgba(var(--tint-rgb),.10) 0%, rgba(var(--tint-rgb),.02) 55%, rgba(var(--tint-rgb),.07) 100%),
+    linear-gradient(180deg,#ffffff,#eef1f6);
+  box-shadow:
+    0 2px 0 rgba(0,0,0,.10),
+    0 3px 6px rgba(0,0,0,.10),
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 -2px 3px rgba(0,0,0,.05);
+  transform:translateY(0);
+  transition:transform .08s ease, box-shadow .08s ease, filter .12s ease, background .15s ease;
+}
+button:hover,.btn:hover{
+  filter:brightness(1.04); transform:translateY(-1px); border-color:#b9c4d4;
+  box-shadow:
+    0 3px 0 rgba(0,0,0,.12),
+    0 7px 11px rgba(0,0,0,.14),
+    inset 0 1px 0 rgba(255,255,255,1),
+    inset 0 -2px 3px rgba(0,0,0,.06);
+}
+button:active,.btn:active{
+  transform:translateY(2px);
+  box-shadow: inset 0 2px 5px rgba(0,0,0,.20);
+}
+button.active,.btn.active{
+  background:
+    linear-gradient(160deg, rgba(91,75,219,.32), rgba(91,75,219,.14)),
+    linear-gradient(180deg,#eef0ff,#e1e5ff);
+  border-color:var(--accent); color:#3f35a5; font-weight:700;
+  transform:translateY(1px);
+  box-shadow:
+    0 1px 0 rgba(0,0,0,.10),
+    inset 0 2px 5px rgba(0,0,0,.16),
+    0 0 0 2px rgba(91,75,219,.22),
+    0 0 10px rgba(91,75,219,.25);
+}
+button.primary,.btn.primary{
+  --tint-rgb:var(--accent-rgb);
+  background:
+    linear-gradient(160deg, rgba(255,255,255,.35), rgba(255,255,255,.04)),
+    linear-gradient(160deg, var(--accent), #4a3bc4);
+  color:#fff; border-color:#4a3bc4;
+  box-shadow:
+    0 3px 0 rgba(58,45,150,.55),
+    0 6px 10px rgba(58,45,150,.32),
+    inset 0 1px 0 rgba(255,255,255,.4);
+}
+button.primary:hover,.btn.primary:hover{ filter:brightness(1.08); transform:translateY(-1px); }
+button.primary:active,.btn.primary:active{ transform:translateY(2px); box-shadow:inset 0 2px 6px rgba(0,0,0,.35); }
+button.danger,.btn.danger{
+  --tint-rgb:var(--danger-rgb);
+  color:var(--danger); border-color:rgba(180,35,24,.30);
+}
+button.danger:hover,.btn.danger:hover{ border-color:rgba(180,35,24,.5); }
 .main{display:grid;grid-template-columns:300px 1fr;flex:1;min-height:0}
 aside{
   min-height:0; overflow:auto; padding:10px; background:var(--panel); border-right:1px solid var(--line);
@@ -100,13 +155,12 @@ canvas{background:#fff;box-shadow:var(--shadow);touch-action:none;max-width:100%
 .selection-box{position:absolute;border:2px dashed #5b4bdb;background:rgba(91,75,219,.08);pointer-events:none;z-index:30}
 .geo-obj-toolbar{position:absolute;z-index:26;display:flex;gap:4px;align-items:center;background:#fff;padding:4px;border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 12px rgba(31,41,55,.12);white-space:nowrap;touch-action:none}
 .geo-obj-toolbar input[type=color]{width:28px;height:26px;padding:1px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer}
-.geo-obj-toolbar button{padding:5px 7px;font-size:12px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer}
-.geo-obj-toolbar button:hover{background:#f8faff;border-color:#b9c4d4}
+.geo-obj-toolbar button{padding:5px 7px;font-size:12px;border-radius:6px}
 .toast{position:fixed;right:18px;bottom:18px;z-index:100;background:#1f2937;color:white;padding:10px 13px;border-radius:10px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.2);max-width:340px}
 
 
 .movable-label{
-  position:absolute;z-index:19;font-weight:800;font-family:Segoe UI,Arial,sans-serif;
+  position:absolute;z-index:19;font-weight:400;font-style:italic;font-family:Georgia,'Times New Roman',serif;
   line-height:1;white-space:nowrap;padding:3px 5px;border:1px dashed transparent;
   border-radius:6px;background:rgba(255,255,255,.68);transform-origin:top left;
   touch-action:none;user-select:none;cursor:grab;
@@ -135,8 +189,10 @@ canvas{background:#fff;box-shadow:var(--shadow);touch-action:none;max-width:100%
 .geometry-layer.picking-point .geo-shape{pointer-events:none}
 .right-angle-layer{pointer-events:none}
 .right-angle-mark{fill:none;stroke-width:3;pointer-events:none}
+.measure-layer{pointer-events:none}
+.measure-label{font:italic 15px Georgia,'Times New Roman',serif;pointer-events:none;text-anchor:middle;dominant-baseline:middle;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
 .geometry-handle{
-  pointer-events:all;cursor:grab;fill:#14aeb4;stroke:#fff;stroke-width:4;
+  pointer-events:all;cursor:grab;fill:#14aeb4;stroke:#fff;stroke-width:2.5;
   filter:drop-shadow(0 1px 2px rgba(0,0,0,.25));
 }
 .geometry-handle.center-handle{fill:#5b4bdb}
@@ -152,9 +208,9 @@ canvas{background:#fff;box-shadow:var(--shadow);touch-action:none;max-width:100%
 }
 
 
-.intersection-marker{fill:#fff;stroke:#5b4bdb;stroke-width:5;pointer-events:none}
-.intersection-cross{stroke:#5b4bdb;stroke-width:3;pointer-events:none}
-.intersection-label{font:bold 24px Segoe UI,Arial,sans-serif;fill:#5b4bdb;cursor:grab;pointer-events:all;user-select:none}
+.intersection-marker{fill:#fff;stroke:#5b4bdb;stroke-width:3;pointer-events:none}
+.intersection-cross{stroke:#5b4bdb;stroke-width:2;pointer-events:none}
+.intersection-label{font:italic 24px Georgia,'Times New Roman',serif;fill:#5b4bdb;cursor:grab;pointer-events:all;user-select:none}
 .intersection-label.dragging{cursor:grabbing}
 .geometry-object.intersection-choice .geo-shape{stroke:#5b4bdb!important;stroke-width:6!important}
 
@@ -240,14 +296,11 @@ canvas{background:#fff;box-shadow:var(--shadow);touch-action:none;max-width:100%
 <summary>Конструкции в последния триъгълник</summary>
 <div class="group-body">
   <div class="grid2">
-    <button id="mediansBtn">3 медиани</button>
-    <button id="altitudesBtn">3 височини</button>
-    <button id="bisectorsBtn">3 ъглополовящи</button>
     <button id="midpointsBtn">Среди на страните</button>
     <button id="incircleBtn">Вписана окръжност</button>
     <button id="circumcircleBtn">Описана окръжност</button>
   </div>
-  <div class="hint" style="margin-top:7px">Първо поставете триъгълник. Конструкциите се добавят към него.</div>
+  <div class="hint" style="margin-top:7px">Първо поставете триъгълник. Конструкциите се добавят към него. За една медиана, височина или ъглополовяща от конкретен връх ползвайте „Построения върху фигура“ по-долу.</div>
 </div>
 </details>
 
@@ -354,6 +407,16 @@ canvas{background:#fff;box-shadow:var(--shadow);touch-action:none;max-width:100%
   <div class="hint" style="margin-top:7px">
     Медиана/височина/ъглополовяща/перпендикуляр/успоредна: кликнете върху цветна точка (връх), после върху отсечка или страна. „Среда на отсечка“ – кликнете направо върху отсечката. Построеното остава свързано и се преизчислява, ако преместите изходната фигура.
   </div>
+</div>
+</details>
+
+<details class="group" open>
+<summary>Измервания</summary>
+<div class="group-body">
+  <div class="grid2">
+    <button id="measureBtn" class="wide">📏 Дължини и ъгли</button>
+  </div>
+  <div class="hint" style="margin-top:7px">Показва дължина на всяка страна/отсечка и градусна мярка на всеки ъгъл (число, без единица – за сравняване).</div>
 </div>
 </details>
 
@@ -799,27 +862,6 @@ function drawQuad(type){
 document.querySelectorAll('[data-quad]').forEach(b=>b.addEventListener('click',()=>drawQuad(b.dataset.quad)));
 
 function requireTriangle(){if(!lastTriangle){alert('Първо поставете триъгълник.');return false;}return true;}
-function drawTriangleLines(kind){
-  if(!requireTriangle())return;
-  const V=[lastTriangle.A,lastTriangle.B,lastTriangle.C];
-  ctx.save();styleStroke();
-  for(let i=0;i<3;i++){
-    const P=V[i],Q=V[(i+1)%3],R=V[(i+2)%3];
-    let F;
-    if(kind==='median')F=midpoint(Q,R);
-    else if(kind==='altitude')F=lineFoot(P,Q,R);
-    else{
-      const pq=dist(P,Q),pr=dist(P,R);
-      F={x:(pr*Q.x+pq*R.x)/(pq+pr),y:(pr*Q.y+pq*R.y)/(pq+pr)};
-    }
-    drawSegment(P,F);
-  }
-  ctx.restore();pushHistory();
-}
-document.getElementById('mediansBtn').addEventListener('click',()=>drawTriangleLines('median'));
-document.getElementById('altitudesBtn').addEventListener('click',()=>drawTriangleLines('altitude'));
-document.getElementById('bisectorsBtn').addEventListener('click',()=>drawTriangleLines('bisector'));
-
 document.getElementById('midpointsBtn').addEventListener('click',()=>{
   if(!requireTriangle())return;
   const {A,B,C}=lastTriangle;
@@ -1617,7 +1659,7 @@ function updateDraftPreview(){ensurePolygonLayer();if(previewPolyline){previewPo
         drawPolygonsOnContext(oc,page);
         (page.labels||[]).forEach(l=>{
           oc.fillStyle=l.color||'#1f2937';
-          oc.font='bold '+(l.fontSize||24)+'px Segoe UI, Arial';
+          oc.font='italic '+(l.fontSize||24)+'px Georgia, "Times New Roman", serif';
           oc.textBaseline='top';
           oc.fillText(l.text,l.x,l.y);
         });
@@ -1661,6 +1703,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   const moveBtn=document.getElementById('selectRegionBtn');
   const rasterBtn=document.getElementById('moveRasterBtn');
   const intersectionBtn=document.getElementById('intersectionBtn');
+  const measureBtn=document.getElementById('measureBtn');
   const constructBtns={};
   document.querySelectorAll('[data-construct]').forEach(b=>{constructBtns[b.dataset.construct]=b;});
   const CONSTRUCT_KINDS=new Set(['median','altitude','bisector','perp','parallel','midpoint']);
@@ -1676,6 +1719,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   let intersections=[];
   let intersectionSelection=[];
   let pendingConstructPoint=null;
+  let showMeasurements=false;
 
   function toast(msg){
     const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);
@@ -1724,11 +1768,12 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     const p=B.getCurrentPage&&B.getCurrentPage();
     if(p){p.objects=serializeObjects();p.intersections=serializeIntersections();}
     refreshRightAngleMarkers();
+    refreshMeasurements();
   }
   function clearDom(){
     if(svg)svg.innerHTML='';
     objects=[];selectedId=null;draft=null;draftEl=null;polyDraft=[];polyPreview=null;intersections=[];intersectionSelection=[];
-    rightAngleGroup=null;
+    rightAngleGroup=null;measureGroup=null;
   }
 
   function labelById(id){
@@ -1752,9 +1797,18 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   function createLabels(names,points){
     const ids=[];
     if(!window.BoardAddon||!window.BoardAddon.createMovableLabel)return ids;
+    // Place each vertex's name just outside the shape, along the ray from the shape's
+    // centroid through that vertex - so labels never sit on top of the sides, whichever
+    // way the shape is oriented (matches the standard textbook look).
+    let cx=0,cy=0,n=0;
+    points.forEach(p=>{if(p){cx+=p.x;cy+=p.y;n++;}});
+    if(n)cx/=n,cy/=n;
     names.forEach((name,i)=>{
       const p=points[i];if(!p)return;
-      const lab=window.BoardAddon.createMovableLabel(name,p.x+10,p.y-32,'point',B.getColor(),24,false);
+      let ux=p.x-cx,uy=p.y-cy;
+      const L=Math.hypot(ux,uy)||1;ux/=L;uy/=L;
+      const dist=30;
+      const lab=window.BoardAddon.createMovableLabel(name,p.x+ux*dist-9,p.y+uy*dist-14,'point',B.getColor(),24,false);
       ids.push(lab.id);
     });
     return ids;
@@ -1838,7 +1892,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
       c.classList.add('geometry-handle');
       if((o.type==='circle'||o.type==='ellipse')&&i===0)c.classList.add('center-handle');
       if((o.type==='circle'||o.type==='ellipse')&&i>0)c.classList.add('radius-handle');
-      c.setAttribute('r','10');c.dataset.index=i;o.g.appendChild(c);o.handles.push(c);
+      c.setAttribute('r','6');c.dataset.index=i;o.g.appendChild(c);o.handles.push(c);
 
       let drag=false,last=null;
       c.addEventListener('pointerdown',e=>{
@@ -2098,6 +2152,69 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     });
     svg.appendChild(group); // keep it painted on top of every shape
   }
+
+  // ---------- Optional length/angle readout ----------
+  let measureGroup=null;
+  function ensureMeasureGroup(){
+    if(!svg)return null;
+    if(!measureGroup){
+      measureGroup=document.createElementNS('http://www.w3.org/2000/svg','g');
+      measureGroup.classList.add('measure-layer');
+      svg.appendChild(measureGroup);
+    }
+    return measureGroup;
+  }
+  function addMeasureText(group,pos,text,color){
+    const el=document.createElementNS('http://www.w3.org/2000/svg','text');
+    el.setAttribute('x',pos.x);el.setAttribute('y',pos.y);
+    el.setAttribute('class','measure-label');
+    el.setAttribute('fill',color||'#1f2937');
+    el.textContent=text;
+    group.appendChild(el);
+  }
+  function refreshMeasurements(){
+    const group=ensureMeasureGroup();
+    if(!group)return;
+    group.innerHTML='';
+    if(!showMeasurements)return;
+    const EPS=2;
+    objects.forEach(o=>{
+      if(o.type==='polygon'&&o.points.length>=3){
+        const n=o.points.length;
+        let cx=0,cy=0;o.points.forEach(p=>{cx+=p.x;cy+=p.y;});cx/=n;cy/=n;
+        for(let i=0;i<n;i++){
+          const a=o.points[i],b=o.points[(i+1)%n];
+          const mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+          let nx=-(b.y-a.y),ny=(b.x-a.x);
+          const L=Math.hypot(nx,ny)||1;nx/=L;ny/=L;
+          if((mid.x-cx)*nx+(mid.y-cy)*ny<0){nx=-nx;ny=-ny;}
+          addMeasureText(group,{x:mid.x+nx*16,y:mid.y+ny*16},String(Math.round(d(a,b))),o.color);
+        }
+        for(let i=0;i<n;i++){
+          const info=angleDirsAndDeg(o.points[i],o.points[(i-1+n)%n],o.points[(i+1)%n]);
+          if(!info||Math.abs(info.deg-90)<=EPS)continue; // the right-angle square already marks this one
+          let bx=info.u1.x+info.u2.x,by=info.u1.y+info.u2.y;
+          const bl=Math.hypot(bx,by);
+          if(bl<1e-6)continue;
+          bx/=bl;by/=bl;
+          addMeasureText(group,{x:o.points[i].x+bx*26,y:o.points[i].y+by*26},Math.round(info.deg)+'°',o.color);
+        }
+      }else if((o.type==='segment'||o.type==='vector')&&o.points.length>=2){
+        const a=o.points[0],b=o.points[1];
+        const mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+        let nx=-(b.y-a.y),ny=(b.x-a.x);
+        const L=Math.hypot(nx,ny)||1;nx/=L;ny/=L;
+        addMeasureText(group,{x:mid.x+nx*16,y:mid.y+ny*16},String(Math.round(d(a,b))),o.color);
+      }
+    });
+    svg.appendChild(group);
+  }
+  function toggleMeasurements(){
+    showMeasurements=!showMeasurements;
+    measureBtn.classList.toggle('active',showMeasurements);
+    refreshMeasurements();
+  }
+
   function intersectLinearLinear(L1,L2){
     const p=L1.a,r=sub(L1.b,L1.a),q=L2.a,s=sub(L2.b,L2.a);
     const den=cross(r,s),qp=sub(q,p),eps=1e-8;
@@ -2175,9 +2292,9 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     if(!it.offsets||it.offsets.length!==points.length)it.offsets=points.map(()=>({x:12,y:-18}));
     points.forEach((p,i)=>{
       const g=document.createElementNS('http://www.w3.org/2000/svg','g');
-      const c=document.createElementNS('http://www.w3.org/2000/svg','circle');c.classList.add('intersection-marker');c.setAttribute('r','8');c.setAttribute('cx',p.x);c.setAttribute('cy',p.y);
-      const l1=document.createElementNS('http://www.w3.org/2000/svg','line');l1.classList.add('intersection-cross');l1.setAttribute('x1',p.x-5);l1.setAttribute('y1',p.y);l1.setAttribute('x2',p.x+5);l1.setAttribute('y2',p.y);
-      const l2=document.createElementNS('http://www.w3.org/2000/svg','line');l2.classList.add('intersection-cross');l2.setAttribute('x1',p.x);l2.setAttribute('y1',p.y-5);l2.setAttribute('x2',p.x);l2.setAttribute('y2',p.y+5);
+      const c=document.createElementNS('http://www.w3.org/2000/svg','circle');c.classList.add('intersection-marker');c.setAttribute('r','5');c.setAttribute('cx',p.x);c.setAttribute('cy',p.y);
+      const l1=document.createElementNS('http://www.w3.org/2000/svg','line');l1.classList.add('intersection-cross');l1.setAttribute('x1',p.x-3);l1.setAttribute('y1',p.y);l1.setAttribute('x2',p.x+3);l1.setAttribute('y2',p.y);
+      const l2=document.createElementNS('http://www.w3.org/2000/svg','line');l2.classList.add('intersection-cross');l2.setAttribute('x1',p.x);l2.setAttribute('y1',p.y-3);l2.setAttribute('x2',p.x);l2.setAttribute('y2',p.y+3);
       const tx=document.createElementNS('http://www.w3.org/2000/svg','text');tx.classList.add('intersection-label');tx.textContent=it.names[i];
       tx.setAttribute('x',p.x+it.offsets[i].x);tx.setAttribute('y',p.y+it.offsets[i].y);
       let drag=false,last=null;
@@ -2382,7 +2499,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     if(objToolbarEl)return;
     objToolbarEl=document.createElement('div');
     objToolbarEl.className='geo-obj-toolbar';
-    objToolbarEl.innerHTML='<input type="color" title="Цвят на фигурата"><button type="button" data-act="del" title="Изтрий фигурата">🗑</button>';
+    objToolbarEl.innerHTML='<input type="color" title="Цвят на фигурата"><button type="button" data-act="dash" title="Плътна / пунктирана линия">┄</button><button type="button" data-act="del" title="Изтрий фигурата">🗑</button>';
     objToolbarEl.addEventListener('pointerdown',e=>e.stopPropagation());
     objToolbarEl.addEventListener('click',e=>e.stopPropagation());
     const colorInput=objToolbarEl.querySelector('input[type=color]');
@@ -2394,6 +2511,13 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
       sync();
     });
     colorInput.addEventListener('change',()=>{sync();B.pushHistory();});
+    objToolbarEl.querySelector('[data-act="dash"]').addEventListener('click',()=>{
+      const o=objects.find(x=>x.id===selectedId);if(!o)return;
+      o.dashed=!o.dashed;
+      if(o.dashed)o.shape.setAttribute('stroke-dasharray','14 10');else o.shape.removeAttribute('stroke-dasharray');
+      updateObjectToolbar();
+      sync();B.pushHistory();
+    });
     objToolbarEl.querySelector('[data-act="del"]').addEventListener('click',()=>deleteSelectedObject());
     wrap.appendChild(objToolbarEl);
   }
@@ -2404,6 +2528,8 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     ensureObjectToolbar();
     const colorInput=objToolbarEl.querySelector('input[type=color]');
     if(document.activeElement!==colorInput)colorInput.value=o.color;
+    const dashBtn=objToolbarEl.querySelector('[data-act="dash"]');
+    if(dashBtn)dashBtn.classList.toggle('active',!!o.dashed);
     const bbox=o.shape.getBBox();
     const cr=canvas.getBoundingClientRect(),wr=wrap.getBoundingClientRect();
     const sx=cr.width/canvas.width,sy=cr.height/canvas.height;
@@ -2714,14 +2840,48 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
         img.onload=()=>{
           oc.drawImage(img,0,0,off.width,off.height);
           (page.objects||[]).forEach(o=>drawObjectOnContext(oc,o));
+          const drawRightAngle=(vertex,u1,u2,color)=>{
+            const size=16;
+            const p1={x:vertex.x+u1.x*size,y:vertex.y+u1.y*size};
+            const p3={x:vertex.x+u2.x*size,y:vertex.y+u2.y*size};
+            const p2={x:p1.x+u2.x*size,y:p1.y+u2.y*size};
+            oc.save();oc.strokeStyle=color||'#1f2937';oc.lineWidth=3;oc.beginPath();
+            oc.moveTo(p1.x,p1.y);oc.lineTo(p2.x,p2.y);oc.lineTo(p3.x,p3.y);oc.stroke();oc.restore();
+          };
+          (page.objects||[]).forEach(o=>{
+            if(o.type==='polygon'&&o.points&&o.points.length>=3){
+              const n=o.points.length;
+              for(let i=0;i<n;i++){
+                const info=angleDirsAndDeg(o.points[i],o.points[(i-1+n)%n],o.points[(i+1)%n]);
+                if(info&&Math.abs(info.deg-90)<=2)drawRightAngle(o.points[i],info.u1,info.u2,o.color);
+              }
+            }else if(o.meta&&o.meta.derived&&(o.meta.derived.kind==='altitude'||o.meta.derived.kind==='perp')){
+              const lineObj=(page.objects||[]).find(x=>x.id===o.meta.derived.line.objId);
+              const piece=lineObj&&linearPieces(lineObj)[o.meta.derived.line.edgeIndex];
+              const P=o.points&&o.points[0];
+              if(!piece||!P)return;
+              const foot=footOnLine(P,piece.a,piece.b);
+              const info=angleDirsAndDeg(foot,P,piece.b);
+              if(info)drawRightAngle(foot,info.u1,info.u2,o.color);
+            }
+          });
           (page.intersections||[]).forEach(it=>{
-            const a=(page.objects||[]).find(o=>o.id===it.parents?.[0]);
-            const b=(page.objects||[]).find(o=>o.id===it.parents?.[1]);
-            if(!a||!b)return;const rr=intersectObjects(a,b);
-            (rr.points||[]).forEach((p,i)=>{oc.save();oc.fillStyle='#fff';oc.strokeStyle='#5b4bdb';oc.lineWidth=4;oc.beginPath();oc.arc(p.x,p.y,7,0,Math.PI*2);oc.fill();oc.stroke();oc.fillStyle='#5b4bdb';oc.font='bold 24px Segoe UI, Arial';oc.textBaseline='alphabetic';const off=(it.offsets||[])[i]||{x:12,y:-18};const names=(it.names&&it.names.length===rr.points.length)?it.names:defaultIntersectionNames(rr.points.length);oc.fillText(names[i]||'P',p.x+off.x,p.y+off.y);oc.restore();});
+            let points=[];
+            if(it.kind==='midpoint'){
+              const a=(page.objects||[]).find(o=>o.id===it.parents?.[0]);
+              const piece=a&&linearPieces(a)[it.edgeIndex];
+              if(!piece)return;
+              points=[midpoint(piece.a,piece.b)];
+            }else{
+              const a=(page.objects||[]).find(o=>o.id===it.parents?.[0]);
+              const b=(page.objects||[]).find(o=>o.id===it.parents?.[1]);
+              if(!a||!b)return;
+              points=intersectObjects(a,b).points||[];
+            }
+            points.forEach((p,i)=>{oc.save();oc.fillStyle='#fff';oc.strokeStyle='#5b4bdb';oc.lineWidth=3;oc.beginPath();oc.arc(p.x,p.y,5,0,Math.PI*2);oc.fill();oc.stroke();oc.fillStyle='#5b4bdb';oc.font='italic 24px Georgia, "Times New Roman", serif';oc.textBaseline='alphabetic';const off=(it.offsets||[])[i]||{x:12,y:-18};const names=(it.names&&it.names.length===points.length)?it.names:defaultIntersectionNames(points.length);oc.fillText(names[i]||'P',p.x+off.x,p.y+off.y);oc.restore();});
           });
           (page.labels||[]).forEach(l=>{
-            oc.fillStyle=l.color||'#1f2937';oc.font='bold '+(l.fontSize||24)+'px Segoe UI, Arial';
+            oc.fillStyle=l.color||'#1f2937';oc.font='italic '+(l.fontSize||24)+'px Georgia, "Times New Roman", serif';
             oc.textBaseline='top';oc.fillText(l.text,l.x,l.y);
           });
           resolve(off.toDataURL('image/png'));
@@ -2738,6 +2898,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   Object.entries(constructBtns).forEach(([kind,btn])=>{
     btn.addEventListener('click',()=>{rasterBtn.classList.remove('active');toggleConstructMode(kind);});
   });
+  measureBtn.addEventListener('click',toggleMeasurements);
 
   window.addEventListener('resize',updateLayer);
   wrap.addEventListener('scroll',updateLayer);
