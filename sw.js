@@ -1,8 +1,9 @@
-const CACHE='math-board-v9-20260831';
+const CACHE_PREFIX='math-board-';
+const CACHE=CACHE_PREFIX+'v10-20260831-secure';
 const FILES=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)));});
 self.addEventListener('activate',e=>e.waitUntil(Promise.all([
-  caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))),
+  caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith(CACHE_PREFIX)&&k!==CACHE).map(k=>caches.delete(k)))),
   self.clients.claim()
 ])));
 // Network-first for the HTML shell so a redeploy is picked up on the very next
