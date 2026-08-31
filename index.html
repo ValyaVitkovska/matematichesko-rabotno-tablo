@@ -218,9 +218,14 @@ canvas{background:#fff;box-shadow:var(--shadow);touch-action:none;max-width:100%
    normal click-to-select-and-drag behavior on the shape itself. */
 .geometry-layer.angle-marking .geo-shape,
 .geometry-layer.angle-marking .geometry-handle{pointer-events:none}
+.geometry-layer.endpoint-snapping .geo-shape,
+.geometry-layer.endpoint-snapping .geometry-handle{pointer-events:none}
 .polygon-layer.angle-marking .editable-polygon,
 .polygon-layer.angle-marking .vertex-handle{pointer-events:none}
+.polygon-layer.endpoint-snapping .editable-polygon,
+.polygon-layer.endpoint-snapping .vertex-handle{pointer-events:none}
 body.angle-marking .movable-label{pointer-events:none}
+body.endpoint-snapping .movable-label{pointer-events:none}
 .right-angle-layer{pointer-events:none}
 .right-angle-mark{fill:none;stroke-width:3;pointer-events:none}
 .measure-layer{pointer-events:none}
@@ -262,6 +267,8 @@ body.angle-marking .movable-label{pointer-events:none}
 .intersection-label{font:italic 24px Georgia,'Times New Roman',serif;fill:#5b4bdb;cursor:grab;pointer-events:all;user-select:none}
 .intersection-label.dragging{cursor:grabbing}
 .geometry-object.intersection-choice .geo-shape{stroke:#5b4bdb!important;stroke-width:6!important}
+.geometry-snap-hint{fill:#fff;stroke:#ef4444;stroke-width:3;pointer-events:none}
+.geometry-start-hint{fill:#fff;stroke:#5b4bdb;stroke-width:4;pointer-events:none}
 
 /* Grid/axes: a separate background layer (never baked into the page pixels), toggled on/off. */
 .grid-axes-layer{position:absolute;pointer-events:none;overflow:visible;z-index:5}
@@ -352,10 +359,10 @@ body.angle-marking .movable-label{pointer-events:none}
 <summary>Линии и базови фигури</summary>
 <div class="group-body">
   <div class="grid2">
-    <button data-tool="segment" title="Начертай отсечка (две точки)">╱ Отсечка</button>
-    <button data-tool="vector" title="Начертай вектор">➜ Вектор</button>
-    <button data-tool="ray" title="Начертай лъч">↗ Лъч</button>
-    <button data-tool="line" title="Начертай права">↔ Права</button>
+    <button data-tool="segment" title="Построй отсечка с последователен избор на две точки">╱ Отсечка</button>
+    <button data-tool="vector" title="Построй вектор с последователен избор на начало и край">➜ Вектор</button>
+    <button data-tool="ray" title="Построй лъч с последователен избор на начало и точка за посоката">↗ Лъч</button>
+    <button data-tool="line" title="Построй права с последователен избор на две точки">↔ Права</button>
     <button data-tool="rect" title="Начертай правоъгълник">▭ Правоъгълник</button>
     <button data-tool="circle" title="Начертай окръжност (център + точка)">◯ Окръжност</button>
     <button data-tool="polygon" title="Начертай многоъгълник (кликвай върховете, двоен клик за край)">⬡ Многоъгълник</button>
@@ -687,6 +694,7 @@ function setTool(next){
   };
   status.textContent=`Инструмент: ${names[tool]||tool}`;
   canvas.style.cursor=tool==='text'?'text':'crosshair';
+  if(window.GeometryEngine&&window.GeometryEngine.onToolChanged)window.GeometryEngine.onToolChanged(tool);
   if(window.BoardAddon && window.BoardAddon.geoTip) window.BoardAddon.geoTip(tool);
 }
 document.querySelectorAll('[data-tool]').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
@@ -1595,10 +1603,10 @@ function updateDraftPreview(){ensurePolygonLayer();if(previewPolyline){previewPo
     smartpen:'Начертайте приблизително права линия или затворена окръжност – ще се изглади автоматично.',
     eraser:'Гумата изтрива свободно написаното и начертаното върху листа.',
     point:'Точките се означават последователно A, B, C…',
-    segment:'Плъзнете от единия край на отсечката до другия. После може да местите двата края независимо.',
-    vector:'Плъзнете от началото към края на вектора. После може да местите началото и края независимо.',
-    ray:'Плъзнете от началната точка по посоката на лъча.',
-    line:'Посочете две точки чрез плъзгане – правата се продължава автоматично.',
+    segment:'Щракнете последователно върху двата края. Червен кръг показва автоматично прихващане към връх.',
+    vector:'Щракнете първо върху началото, после върху края на вектора. Близките върхове се прихващат автоматично.',
+    ray:'Щракнете върху началната точка, после върху точка, задаваща посоката на лъча.',
+    line:'Щракнете последователно върху две точки. Между кликовете се показва предварителен изглед на правата.',
     circle:'Плъзнете, за да създадете окръжност. В режим „Мести точка / връх“ лилавата точка мести центъра, а оранжевата променя радиуса.',
     polygon:'Щраквайте върховете един след друг; двоен щрак завършва многоъгълника.',
     tangent:'Щракнете близо до желаната точка върху последната окръжност.',
@@ -2022,7 +2030,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
 
   let svg=null, objects=[], selectedId=null;
   let mode='none'; // none | point | move | intersection | median | altitude | bisector | perp | parallel | midpoint
-  let draft=null, draftEl=null;
+  let draft=null, draftEl=null, snapHint=null, linearStart=null, linearStartHint=null;
   let smartRaw=[];
   let polyDraft=[];
   let polyPreview=null;
@@ -2035,11 +2043,30 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);
     setTimeout(()=>t.remove(),2800);
   }
-  let snapToGridEnabled=false, snapGridStep=40;
+  let snapToGridEnabled=false, snapGridStep=40, lastPointSnap=null;
   function setSnapToGrid(on,step){ snapToGridEnabled=!!on; if(step)snapGridStep=step; }
-  function pt(e){
+  function nearestExistingPoint(raw,radius){
+    const candidates=[];
+    objects.forEach(o=>(o.points||[]).forEach(p=>{
+      if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y))candidates.push(p);
+    }));
+    intersections.forEach(it=>(it.lastPoints||[]).forEach(p=>{
+      if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y))candidates.push(p);
+    }));
+    const tri=B.getLastTriangle&&B.getLastTriangle();
+    if(tri)[tri.A,tri.B,tri.C].forEach(p=>{if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y))candidates.push(p);});
+    let best=null,bestDistance=radius;
+    candidates.forEach(p=>{const distance=d(raw,p);if(distance<=bestDistance){best=p;bestDistance=distance;}});
+    return best?{x:best.x,y:best.y}:null;
+  }
+  function pt(e,snapToExisting=false){
     const r=canvas.getBoundingClientRect();
     let p={x:(e.clientX-r.left)*(canvas.width/r.width),y:(e.clientY-r.top)*(canvas.height/r.height)};
+    lastPointSnap=null;
+    if(snapToExisting){
+      const target=nearestExistingPoint(p,24*canvas.width/r.width);
+      if(target){lastPointSnap=target;return target;}
+    }
     if(snapToGridEnabled) p={x:Math.round(p.x/snapGridStep)*snapGridStep,y:Math.round(p.y/snapGridStep)*snapGridStep};
     return p;
   }
@@ -2083,7 +2110,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   }
   function clearDom(){
     if(svg)svg.innerHTML='';
-    objects=[];selectedId=null;draft=null;draftEl=null;polyDraft=[];polyPreview=null;intersections=[];intersectionSelection=[];
+    objects=[];selectedId=null;draft=null;draftEl=null;snapHint=null;linearStart=null;linearStartHint=null;polyDraft=[];polyPreview=null;intersections=[];intersectionSelection=[];
     rightAngleGroup=null;measureGroup=null;
   }
 
@@ -3046,6 +3073,33 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
 
   // ---------- Drawing new editable geometric objects ----------
   const capturedTools=new Set(['segment','vector','ray','line','rect','circle','midsegment','smartpen','tangent']);
+  const endpointSnapTools=new Set(['segment','vector','ray','line','midsegment']);
+
+  function onToolChanged(nextTool){
+    if(linearStart&&linearStart.tool!==nextTool)clearLinearConstruction();
+    const active=endpointSnapTools.has(nextTool);
+    if(svg)svg.classList.toggle('endpoint-snapping',active);
+    const polygonLayer=document.querySelector('.polygon-layer');
+    if(polygonLayer)polygonLayer.classList.toggle('endpoint-snapping',active);
+    document.body.classList.toggle('endpoint-snapping',active);
+  }
+
+  function updateSnapHint(point){
+    if(snapHint){snapHint.remove();snapHint=null;}
+    if(!point)return;
+    ensureLayer();
+    snapHint=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    snapHint.setAttribute('cx',point.x);snapHint.setAttribute('cy',point.y);snapHint.setAttribute('r',9);
+    snapHint.setAttribute('class','geometry-snap-hint');svg.appendChild(snapHint);
+  }
+  function showLinearStartHint(point){
+    if(linearStartHint){linearStartHint.remove();linearStartHint=null;}
+    if(!point)return;
+    ensureLayer();
+    linearStartHint=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    linearStartHint.setAttribute('cx',point.x);linearStartHint.setAttribute('cy',point.y);linearStartHint.setAttribute('r',10);
+    linearStartHint.setAttribute('class','geometry-start-hint');svg.appendChild(linearStartHint);
+  }
 
   function showDraft(type,a,b,raw=null){
     ensureLayer();
@@ -3060,13 +3114,24 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     }else if(type==='smartpen' && raw){
       el=document.createElementNS('http://www.w3.org/2000/svg','polyline');
       el.setAttribute('points',raw.map(p=>p.x+','+p.y).join(' '));
+    }else if(type==='line'||type==='ray'){
+      el=document.createElementNS('http://www.w3.org/2000/svg','line');
+      const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len,big=Math.max(canvas.width,canvas.height)*2;
+      const p1=type==='ray'?a:{x:a.x-ux*big,y:a.y-uy*big};
+      const p2={x:a.x+ux*big,y:a.y+uy*big};
+      el.setAttribute('x1',p1.x);el.setAttribute('y1',p1.y);el.setAttribute('x2',p2.x);el.setAttribute('y2',p2.y);
     }else{
       el=document.createElementNS('http://www.w3.org/2000/svg','line');
       el.setAttribute('x1',a.x);el.setAttribute('y1',a.y);el.setAttribute('x2',b.x);el.setAttribute('y2',b.y);
     }
     el.classList.add('geometry-preview');svg.appendChild(el);draftEl=el;
   }
-  function clearDraft(){if(draftEl){draftEl.remove();draftEl=null;}draft=null;smartRaw=[];}
+  function clearDraft(){if(draftEl){draftEl.remove();draftEl=null;}updateSnapHint(null);draft=null;smartRaw=[];}
+  function clearLinearConstruction(){
+    linearStart=null;
+    if(linearStartHint){linearStartHint.remove();linearStartHint=null;}
+    clearDraft();
+  }
 
   function rdp(points,eps){
     if(points.length<3)return points.slice();
@@ -3130,7 +3195,34 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     if(!capturedTools.has(tool))return;
 
     e.preventDefault();e.stopImmediatePropagation();
-    const p=pt(e);
+    const p=pt(e,endpointSnapTools.has(tool));
+
+    if(endpointSnapTools.has(tool)){
+      if(!linearStart){
+        linearStart={tool,point:{x:p.x,y:p.y}};
+        draft={tool,start:linearStart.point,last:p,clickMode:true};
+        showDraft(tool,linearStart.point,p);
+        showLinearStartHint(linearStart.point);
+        updateSnapHint(lastPointSnap);
+        geoSpeech.textContent='Първата точка е избрана. Сега щракнете върху втората точка. Натиснете Esc за отказ.';
+        return;
+      }
+      const a=linearStart.point,b=p;
+      if(d(a,b)<=8){
+        toast('Изберете различна втора точка.');
+        updateSnapHint(lastPointSnap);
+        return;
+      }
+      createObject(tool==='midsegment'?'segment':tool,[a,b],tool==='midsegment'?{meta:{midpoint:true}}:{});
+      if(tool==='midsegment'&&window.BoardAddon&&window.BoardAddon.createMovableLabel){
+        const m={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+        window.BoardAddon.createMovableLabel('M',m.x+10,m.y-32,'point',B.getColor(),24,false);
+      }
+      B.pushHistory();
+      clearLinearConstruction();
+      geoSpeech.textContent='Построението е готово. Щракнете върху първа точка за следващо.';
+      return;
+    }
 
     if(tool==='tangent'){
       // Prefer a live GeometryEngine circle object so the tangent point can be tied to it
@@ -3161,21 +3253,24 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     draft={tool,start:p,last:p};
     smartRaw=tool==='smartpen'?[p]:[];
     showDraft(tool,p,p,smartRaw);
+    updateSnapHint(lastPointSnap);
     canvas.setPointerCapture(e.pointerId);
   },true);
 
   canvas.addEventListener('pointermove',e=>{
     if(!draft)return;
     e.preventDefault();e.stopImmediatePropagation();
-    const p=pt(e);draft.last=p;
+    const p=pt(e,endpointSnapTools.has(draft.tool));draft.last=p;
     if(draft.tool==='smartpen'){smartRaw.push(p);showDraft('smartpen',draft.start,p,smartRaw);}
     else showDraft(draft.tool,draft.start,p);
+    updateSnapHint(lastPointSnap);
   },true);
 
   canvas.addEventListener('pointerup',e=>{
     if(!draft)return;
     e.preventDefault();e.stopImmediatePropagation();
-    const a=draft.start,b=pt(e),tool=draft.tool;
+    if(draft.clickMode)return;
+    const tool=draft.tool,a=draft.start,b=pt(e,endpointSnapTools.has(tool));
 
     if(tool==='segment'||tool==='vector'||tool==='ray'||tool==='line'){
       if(d(a,b)>8){createObject(tool,[a,b]);B.pushHistory();}
@@ -3208,6 +3303,13 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     }
     clearDraft();
   },true);
+
+  window.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&linearStart){
+      clearLinearConstruction();
+      geoSpeech.textContent='Построението е отменено. Изберете първа точка.';
+    }
+  });
 
   // ---------- Free polygon routed to the new engine ----------
   function addPolygonVertex(p){
@@ -3339,7 +3441,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   wrap.addEventListener('scroll',updateLayer);
 
   window.GeometryEngine={
-    serializeObjects,serializeIntersections,loadObjects,createObject,createLabeledPolygon,
+    serializeObjects,serializeIntersections,loadObjects,createObject,createLabeledPolygon,onToolChanged,
     toggleMoveMode,togglePointMode,toggleIntersectionMode,toggleConstructMode,setMode,addPolygonVertex,finishPolygon,intersectObjects,
     buildTriangleCircle,buildTriangleMidpoints,setSnapToGrid
   };
@@ -3347,6 +3449,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   // Load current page. Legacy polygons migrate automatically.
   const pg=B.getCurrentPage&&B.getCurrentPage();
   loadObjects((pg&&pg.objects)||[],(pg&&pg.polygons)||[],(pg&&pg.intersections)||[]);
+  onToolChanged(B.getTool());
 })();
 </script>
 
