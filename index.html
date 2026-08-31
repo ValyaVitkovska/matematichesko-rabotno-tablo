@@ -234,6 +234,18 @@ body.angle-marking .movable-label{pointer-events:none}
 .geometry-handle.radius-handle{fill:#f59e0b}
 .geometry-handle.dragging{cursor:grabbing}
 .geometry-handle.hidden-geo-handle{display:none}
+/* Construction picking (median/altitude/bisector/perpendicular/parallel/midpoint): make the
+   clickable vertex, then the clickable edge, unmistakably bright at each step. */
+@keyframes pickPointPulse{0%,100%{r:7}50%{r:11}}
+.geometry-layer.picking-point .geometry-handle:not(.hidden-geo-handle){
+  fill:#ff8f00 !important;stroke:#fff;stroke-width:3;
+  filter:drop-shadow(0 0 7px rgba(255,143,0,.95)) drop-shadow(0 0 2px rgba(255,143,0,1));
+  animation:pickPointPulse 1s ease-in-out infinite;
+}
+.geometry-layer.picking-line .geo-shape{
+  stroke:#ff8f00 !important;stroke-width:6 !important;
+  filter:drop-shadow(0 0 7px rgba(255,143,0,.85));
+}
 .geometry-preview{
   pointer-events:none;fill:none;stroke:#64748b;stroke-width:3;stroke-dasharray:10 8;
   stroke-linecap:round;stroke-linejoin:round;
@@ -410,24 +422,6 @@ body.angle-marking .movable-label{pointer-events:none}
 </details>
 
 
-<details class="group" open data-tint="blue">
-<summary>Редактиране и означения</summary>
-<div class="group-body">
-  <div class="grid2">
-    <button id="selectRegionBtn">✥ Премести цял обект</button>
-    <button id="editVerticesBtn">◆ Мести точка / връх</button>
-    <button id="angleBtn">∠ Ъгъл с дъга</button>
-    <button id="intersectionBtn">⊗ Пресечна точка</button>
-    <button id="moveRasterBtn">▧ Премести част от листа</button>
-    <button id="moveLabelsBtn" class="wide active">🏷 Мести означения</button>
-  </div>
-  <div class="hint" style="margin-top:7px">
-    „Премести цял обект“ освобождава място, като мести фигурата без да променя формата ѝ. „Мести точка / връх“ показва характерните точки: краища на отсечка/вектор, две точки на права, върхове на многоъгълник, център и точка от окръжността. При окръжност центърът я мести, а другата точка променя радиуса. „Пресечна точка“: изберете последователно два обекта; точката/точките се построяват автоматично и следват фигурите при преместване.<br>
-    Означенията A, B, C, M, O, I, T, α… се местят отделно с плъзгане. Двоен щрак ги преименува.
-  </div>
-</div>
-</details>
-
 <details class="group" open data-tint="violet">
 <summary>Построения върху фигура</summary>
 <div class="group-body">
@@ -467,6 +461,24 @@ body.angle-marking .movable-label{pointer-events:none}
   <div class="grid2" style="margin-top:8px">
     <button id="geoQuickHelp">Какво мога?</button>
     <button id="geoHide">Скрий Гео</button>
+  </div>
+</div>
+</details>
+
+<details class="group" open data-tint="blue">
+<summary>Редактиране и означения</summary>
+<div class="group-body">
+  <div class="grid2">
+    <button id="selectRegionBtn">✥ Премести цял обект</button>
+    <button id="editVerticesBtn">◆ Мести точка / връх</button>
+    <button id="angleBtn">∠ Ъгъл с дъга</button>
+    <button id="intersectionBtn">⊗ Пресечна точка</button>
+    <button id="moveRasterBtn">▧ Премести част от листа</button>
+    <button id="moveLabelsBtn" class="wide active">🏷 Мести означения</button>
+  </div>
+  <div class="hint" style="margin-top:7px">
+    „Премести цял обект“ освобождава място, като мести фигурата без да променя формата ѝ. „Мести точка / връх“ показва характерните точки: краища на отсечка/вектор, две точки на права, върхове на многоъгълник, център и точка от окръжността. При окръжност центърът я мести, а другата точка променя радиуса. „Пресечна точка“: изберете последователно два обекта; точката/точките се построяват автоматично и следват фигурите при преместване.<br>
+    Означенията A, B, C, M, O, I, T, α… се местят отделно с плъзгане. Двоен щрак ги преименува.
   </div>
 </div>
 </details>
@@ -2741,6 +2753,11 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     // another object's line (e.g. several constructions sharing the same vertex) always wins
     // the click - otherwise whichever shape happens to be topmost in the SVG can shadow it.
     if(svg)svg.classList.toggle('picking-point',showAllHandles&&!pendingConstructPoint);
+    // Once the vertex is picked (or for "midpoint", which has no vertex step at all), the
+    // shapes' own edges become the click target - highlight those brightly too, so the whole
+    // median/altitude/bisector/perpendicular/parallel/midpoint flow stays easy to follow.
+    const pickingLine=mode==='midpoint'||(showAllHandles&&!!pendingConstructPoint);
+    if(svg)svg.classList.toggle('picking-line',pickingLine);
     Object.entries(constructBtns).forEach(([kind,btn])=>btn.classList.toggle('active',mode===kind));
     updateObjectToolbar();
   }
