@@ -821,8 +821,9 @@ function drawTriangleType(type){
     A={x:cx-w*.23,y:cy+h*.24};B={x:cx+w*.23,y:cy+h*.24};C={x:cx,y:cy-h*.28};
   }else if(type==='scalene'){
     A={x:cx-w*.29,y:cy+h*.23};B={x:cx+w*.25,y:cy+h*.19};C={x:cx-w*.13,y:cy-h*.28};
-  }else{ // 'right'
-    A={x:cx-w*.22,y:cy+h*.23};B={x:cx-w*.22,y:cy-h*.25};C={x:cx+w*.27,y:cy+h*.23};
+  }else{ // 'right' — B is the other bottom vertex, C is the top of the vertical leg,
+         // matching the counter-clockwise A→B→C order used by the other triangle types.
+    A={x:cx-w*.22,y:cy+h*.23};B={x:cx+w*.27,y:cy+h*.23};C={x:cx-w*.22,y:cy-h*.25};
   }
   lastTriangle={A:{...A},B:{...B},C:{...C}};
   const triMeta={role:'triangle'};
@@ -861,6 +862,9 @@ function drawQuad(type){
   }else{
     P=[{x:cx-w*.23,y:cy-h*.22},{x:cx+w*.25,y:cy-h*.12},{x:cx+w*.19,y:cy+h*.24},{x:cx-w*.30,y:cy+h*.16}];
   }
+  // Every branch above builds P clockwise starting near the top-left corner; reverse it
+  // so vertex names run counter-clockwise starting from the bottom-left vertex instead.
+  P=P.reverse();
   let quadMeta={role:'quadrilateral'};
   if(type==='square'||type==='rectangle') quadMeta={role:'quadrilateral',shape:'rectangle'};
   else if(type==='parallelogram') quadMeta={role:'quadrilateral',shape:'parallelogram'};
@@ -2763,8 +2767,12 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     if(tool==='segment'||tool==='vector'||tool==='ray'||tool==='line'){
       if(d(a,b)>8){createObject(tool,[a,b]);B.pushHistory();}
     }else if(tool==='rect'){
-      if(Math.abs(b.x-a.x)>8&&Math.abs(b.y-a.y)>8)
-        createLabeledPolygon([{x:a.x,y:a.y},{x:b.x,y:a.y},{x:b.x,y:b.y},{x:a.x,y:b.y}],['A','B','C','D'],{role:'quadrilateral',shape:'rectangle'});
+      if(Math.abs(b.x-a.x)>8&&Math.abs(b.y-a.y)>8){
+        // Order by actual position (not drag direction) so labels are always
+        // counter-clockwise starting from the bottom-left corner: A,B,C,D.
+        const minX=Math.min(a.x,b.x),maxX=Math.max(a.x,b.x),minY=Math.min(a.y,b.y),maxY=Math.max(a.y,b.y);
+        createLabeledPolygon([{x:minX,y:maxY},{x:maxX,y:maxY},{x:maxX,y:minY},{x:minX,y:minY}],['A','B','C','D'],{role:'quadrilateral',shape:'rectangle'});
+      }
     }else if(tool==='circle'){
       if(d(a,b)>8){createObject('circle',[a,b],{meta:{role:'circle'}});B.pushHistory();}
     }else if(tool==='midsegment'){
