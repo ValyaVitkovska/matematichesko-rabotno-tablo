@@ -269,6 +269,10 @@ body.angle-marking .movable-label{pointer-events:none}
 .grid-axes-layer .axis-line{stroke:#33415580;stroke-width:2.5}
 .grid-axes-layer .axis-arrow{fill:#334155}
 .grid-axes-layer .axis-label{font:italic 22px Georgia,'Times New Roman',serif;fill:#334155}
+.grid-axes-layer .axis-drag-hit{stroke:transparent;stroke-width:24;pointer-events:stroke;cursor:grab;touch-action:none}
+.grid-axes-layer .axes-group{pointer-events:none}
+.grid-axes-layer.axes-on .axes-group{pointer-events:all}
+.grid-axes-layer.axes-on .axes-group.dragging,.grid-axes-layer.axes-on .axes-group.dragging *{cursor:grabbing}
 .grid-axes-layer .grid-group{display:none}
 .grid-axes-layer.grid-on .grid-group{display:block}
 .grid-axes-layer .axes-group{display:none}
@@ -463,7 +467,7 @@ body.angle-marking .movable-label{pointer-events:none}
 <div class="group-body">
   <div class="grid2">
     <button id="gridBtn" title="Показва/скрива квадратна мрежа върху листа (не се отпечатва в чертежа, отделен слой)"># Мрежа</button>
-    <button id="axesBtn" title="Показва/скрива координатна система (оси Ox, Oy)">✣ Координатна система</button>
+    <button id="axesBtn" title="Показва/скрива координатна система. Влачете осите, за да преместите началото върху възел на мрежата.">✣ Координатна система</button>
     <button id="snapGridBtn" title="Когато е включено, новите геометрични точки прилепват към възлите на мрежата">▦ Прилепване към мрежата</button>
   </div>
   <div class="zoom-bar" style="margin-top:8px">
@@ -3369,11 +3373,43 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   const pageThumbs=document.getElementById('pageThumbs');
 
   // ---------- Grid / axes background layer ----------
-  let gridSvg=null,gridOn=false,axesOn=false;
+  const GRID_STEP=40,AXIS_MARGIN=80;
+  const snapAxisCoord=(value,limit)=>Math.max(AXIS_MARGIN,Math.min(Math.floor((limit-AXIS_MARGIN)/GRID_STEP)*GRID_STEP,Math.round(value/GRID_STEP)*GRID_STEP));
+  let axesOrigin={x:snapAxisCoord(canvas.width/2,canvas.width),y:snapAxisCoord(canvas.height/2,canvas.height)};
+  try{
+    const savedOrigin=JSON.parse(localStorage.getItem('mboard_axes_origin')||'null');
+    if(savedOrigin&&Number.isFinite(savedOrigin.x)&&Number.isFinite(savedOrigin.y))axesOrigin={x:snapAxisCoord(savedOrigin.x,canvas.width),y:snapAxisCoord(savedOrigin.y,canvas.height)};
+  }catch{}
+  let gridSvg=null,gridOn=false,axesOn=false,axesDrag=null;
   function ensureGridLayer(){
     if(gridSvg)return gridSvg;
     gridSvg=document.createElementNS(SVGNS,'svg');
     gridSvg.classList.add('grid-axes-layer');
+    gridSvg.addEventListener('pointerdown',e=>{
+      if(!axesOn||!e.target.closest('.axes-group'))return;
+      e.preventDefault();e.stopPropagation();
+      const r=canvas.getBoundingClientRect();
+      axesDrag={pointerId:e.pointerId,startX:(e.clientX-r.left)*canvas.width/r.width,startY:(e.clientY-r.top)*canvas.height/r.height,originX:axesOrigin.x,originY:axesOrigin.y};
+      gridSvg.setPointerCapture(e.pointerId);
+      const group=gridSvg.querySelector('.axes-group');if(group)group.classList.add('dragging');
+    });
+    gridSvg.addEventListener('pointermove',e=>{
+      if(!axesDrag||e.pointerId!==axesDrag.pointerId)return;
+      e.preventDefault();
+      const r=canvas.getBoundingClientRect();
+      const x=(e.clientX-r.left)*canvas.width/r.width,y=(e.clientY-r.top)*canvas.height/r.height;
+      axesOrigin={x:snapAxisCoord(axesDrag.originX+x-axesDrag.startX,canvas.width),y:snapAxisCoord(axesDrag.originY+y-axesDrag.startY,canvas.height)};
+      rebuildGridLayer();
+      const group=gridSvg.querySelector('.axes-group');if(group)group.classList.add('dragging');
+    });
+    const finishAxesDrag=e=>{
+      if(!axesDrag||e.pointerId!==axesDrag.pointerId)return;
+      axesDrag=null;
+      try{localStorage.setItem('mboard_axes_origin',JSON.stringify(axesOrigin));}catch{}
+      const group=gridSvg.querySelector('.axes-group');if(group)group.classList.remove('dragging');
+    };
+    gridSvg.addEventListener('pointerup',finishAxesDrag);
+    gridSvg.addEventListener('pointercancel',finishAxesDrag);
     wrap.insertBefore(gridSvg,wrap.firstChild);
     return gridSvg;
   }
@@ -3386,6 +3422,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   }
   function rebuildGridLayer(){
     ensureGridLayer();
+    axesOrigin={x:snapAxisCoord(axesOrigin.x,canvas.width),y:snapAxisCoord(axesOrigin.y,canvas.height)};
     gridSvg.setAttribute('viewBox','0 0 '+canvas.width+' '+canvas.height);
     gridSvg.innerHTML='';
     const step=40;
@@ -3403,8 +3440,10 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     gridSvg.appendChild(gGrid);
 
     const gAxes=document.createElementNS(SVGNS,'g');gAxes.setAttribute('class','axes-group');
-    const cx=canvas.width/2,cy=canvas.height/2;
+    const cx=axesOrigin.x,cy=axesOrigin.y;
     const mkLine=(x1,y1,x2,y2)=>{const l=document.createElementNS(SVGNS,'line');l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);l.setAttribute('class','axis-line');return l;};
+    const hHit=mkLine(70,cy,canvas.width-70,cy);hHit.setAttribute('class','axis-drag-hit');gAxes.appendChild(hHit);
+    const vHit=mkLine(cx,canvas.height-60,cx,60);vHit.setAttribute('class','axis-drag-hit');gAxes.appendChild(vHit);
     gAxes.appendChild(mkLine(70,cy,canvas.width-70,cy));
     gAxes.appendChild(mkLine(cx,canvas.height-60,cx,60));
     const mkTri=pts=>{const p=document.createElementNS(SVGNS,'polygon');p.setAttribute('points',pts.map(pp=>pp.join(',')).join(' '));p.setAttribute('class','axis-arrow');return p;};
@@ -3433,7 +3472,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     }
     if(axesOn){
       octx.save();octx.strokeStyle='#334155';octx.fillStyle='#334155';octx.lineWidth=2.5;octx.setLineDash([]);
-      const cx=w/2,cy=h/2;
+      const cx=axesOrigin.x/canvas.width*w,cy=axesOrigin.y/canvas.height*h;
       octx.beginPath();octx.moveTo(70,cy);octx.lineTo(w-70,cy);octx.stroke();
       octx.beginPath();octx.moveTo(cx,h-60);octx.lineTo(cx,60);octx.stroke();
       octx.beginPath();octx.moveTo(w-70,cy);octx.lineTo(w-90,cy-10);octx.lineTo(w-90,cy+10);octx.closePath();octx.fill();
