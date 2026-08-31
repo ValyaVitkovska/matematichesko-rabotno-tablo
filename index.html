@@ -156,7 +156,19 @@ canvas{background:#fff;box-shadow:var(--shadow);touch-action:none;max-width:100%
 .geo-mini{width:28px;height:28px;border-radius:50%;object-fit:cover}
 .geo-card{display:grid;grid-template-columns:96px 1fr;gap:10px;align-items:center}
 .geo-card img{width:96px;height:96px;object-fit:cover;border-radius:18px;border:1px solid var(--line)}
-.geo-speech{font-size:12px;line-height:1.45;background:#f2fbfb;border:1px solid #cceced;border-radius:12px;padding:9px}
+.geo-speech{
+  font-size:13px;line-height:1.5;color:#075657;font-weight:600;
+  background:linear-gradient(135deg,#d7f7f5,#c3f0ee);
+  border:1px solid #7fd9d4;border-left:4px solid #0aa39c;
+  border-radius:12px;padding:9px 11px;
+  box-shadow:0 2px 6px rgba(10,163,156,.18);
+}
+@keyframes geoSpeechFlash{
+  0%,100%{background:linear-gradient(135deg,#d7f7f5,#c3f0ee);box-shadow:0 2px 6px rgba(10,163,156,.18);border-left-color:#0aa39c;}
+  25%,75%{background:linear-gradient(135deg,#fff3b0,#ffe28a);box-shadow:0 0 0 3px rgba(255,193,7,.5),0 2px 12px rgba(255,193,7,.45);border-left-color:#e0a300;}
+  50%{background:linear-gradient(135deg,#d7f7f5,#c3f0ee);box-shadow:0 2px 6px rgba(10,163,156,.18);border-left-color:#0aa39c;}
+}
+.geo-speech.flash{animation:geoSpeechFlash 1.1s ease-in-out 1;}
 .branding{display:flex;gap:9px;align-items:center;border-top:1px solid var(--line);padding:12px 4px 4px;margin-top:10px}
 .branding img{width:38px;height:38px;object-fit:contain}
 .branding div{font-size:10.5px;line-height:1.35;color:#64748b}
@@ -201,6 +213,14 @@ canvas{background:#fff;box-shadow:var(--shadow);touch-action:none;max-width:100%
 }
 .geometry-object.selected .geo-shape{filter:drop-shadow(0 0 2px rgba(91,75,219,.5))}
 .geometry-layer.picking-point .geo-shape{pointer-events:none}
+/* While the angle tool is active, every shape/handle must let clicks fall through to the
+   canvas underneath (which does its own vertex/edge snapping) instead of triggering the
+   normal click-to-select-and-drag behavior on the shape itself. */
+.geometry-layer.angle-marking .geo-shape,
+.geometry-layer.angle-marking .geometry-handle{pointer-events:none}
+.polygon-layer.angle-marking .editable-polygon,
+.polygon-layer.angle-marking .vertex-handle{pointer-events:none}
+body.angle-marking .movable-label{pointer-events:none}
 .right-angle-layer{pointer-events:none}
 .right-angle-mark{fill:none;stroke-width:3;pointer-events:none}
 .measure-layer{pointer-events:none}
@@ -1134,6 +1154,21 @@ window.BoardAPI={
   const geoSpeech=document.getElementById('geoSpeech');
   const installBtn=document.getElementById('installBtn');
 
+  // Flash the tip box briefly whenever its text changes, so a new recommendation catches
+  // the eye instead of blending in — works for every geoSpeech.textContent=... call site
+  // in the app without needing to touch each one individually.
+  if(geoSpeech && window.MutationObserver){
+    let flashTimer=null;
+    const geoSpeechObserver=new MutationObserver(()=>{
+      geoSpeech.classList.remove('flash');
+      void geoSpeech.offsetWidth; // restart the CSS animation even if it's already mid-flash
+      geoSpeech.classList.add('flash');
+      clearTimeout(flashTimer);
+      flashTimer=setTimeout(()=>geoSpeech.classList.remove('flash'),1150);
+    });
+    geoSpeechObserver.observe(geoSpeech,{characterData:true,childList:true,subtree:true});
+  }
+
   let customTool=null;
   let selecting=false, selStart=null, selectionBox=null;
   let anglePts=[];
@@ -1453,9 +1488,15 @@ function updateDraftPreview(){ensurePolygonLayer();if(previewPolyline){previewPo
     geoSpeech.textContent='Мога да помагам с A4 страници, чертежи, триъгълници и четириъгълници, медиани, височини, ъглополовящи, окръжности, допирателни, снимки и означения. Имената A, B, C, M, O, I, T и α могат да се местят директно и да се преименуват с двоен щрак. Редактируеми са отсечки, вектори, прави и лъчи, триъгълници, четириъгълници, многоъгълници, окръжности и разпознатите фигури от умната писалка. Може да местите целия обект или само избрана характерна точка. С „Пресечна точка“ избирате два обекта и получената точка се преизчислява автоматично при промяна на фигурите.';
   });
 
+  function setAngleMarkingActive(active){
+    const gl=document.querySelector('.geometry-layer');if(gl)gl.classList.toggle('angle-marking',active);
+    const pl=document.querySelector('.polygon-layer');if(pl)pl.classList.toggle('angle-marking',active);
+    document.body.classList.toggle('angle-marking',active);
+  }
   function setCustomTool(t){
     customTool=t;anglePts=[];
     if(typeof clearAngleDraft==='function')clearAngleDraft();
+    setAngleMarkingActive(t==='angle');
     B.setTool(t);
     document.querySelectorAll('[data-tool]').forEach(b=>b.classList.remove('active'));
     document.getElementById('moveRasterBtn').classList.toggle('active',t==='select');
@@ -1472,6 +1513,7 @@ function updateDraftPreview(){ensurePolygonLayer();if(previewPolyline){previewPo
     el.addEventListener('click',()=>{
       customTool=null;anglePts=[];
       if(typeof clearAngleDraft==='function')clearAngleDraft();
+      setAngleMarkingActive(false);
       document.getElementById('moveRasterBtn').classList.remove('active');
       document.getElementById('angleBtn').classList.remove('active');
     });
@@ -1738,6 +1780,7 @@ function updateDraftPreview(){ensurePolygonLayer();if(previewPolyline){previewPo
       drawSelectionBox(selStart,selStart);canvas.setPointerCapture(e.pointerId);
     }else if(customTool==='angle'){
       e.preventDefault();e.stopImmediatePropagation();
+      setAngleMarkingActive(true); // keeps shapes pass-through even if they were (re)created after the tool was armed
       const raw=canvasPoint(e);
       if(anglePts.length===0){
         anglePts.push(snapAngleVertex(raw));
