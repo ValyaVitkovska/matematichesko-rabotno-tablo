@@ -979,9 +979,13 @@ function drawQuad(type){
   // so vertex names run counter-clockwise starting from the bottom-left vertex instead.
   P=P.reverse();
   let quadMeta={role:'quadrilateral'};
-  if(type==='square'||type==='rectangle') quadMeta={role:'quadrilateral',shape:'rectangle'};
+  if(type==='square') quadMeta={role:'quadrilateral',shape:'square'};
+  else if(type==='rectangle') quadMeta={role:'quadrilateral',shape:'rectangle'};
   else if(type==='parallelogram') quadMeta={role:'quadrilateral',shape:'parallelogram'};
-  else if(type==='trapezoid'||type==='isotrapezoid') quadMeta={role:'quadrilateral',shape:'trapezoid'};
+  else if(type==='rhombus') quadMeta={role:'quadrilateral',shape:'rhombus'};
+  else if(type==='trapezoid') quadMeta={role:'quadrilateral',shape:'trapezoid'};
+  else if(type==='isotrapezoid') quadMeta={role:'quadrilateral',shape:'isotrapezoid'};
+  else if(type==='kite') quadMeta={role:'quadrilateral',shape:'kite',axis:[1,3]};
   if(window.GeometryEngine && window.GeometryEngine.createLabeledPolygon){
     window.GeometryEngine.createLabeledPolygon(P,['A','B','C','D'],quadMeta);
     return;
@@ -2176,6 +2180,32 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     return o;
   }
 
+  function inferQuadrilateralMeta(points,meta){
+    const result={...(meta||{})};
+    if(result.shape||result.role!=='quadrilateral'||!points||points.length!==4)return result;
+    const vec=(a,b)=>({x:b.x-a.x,y:b.y-a.y});
+    const len=v=>Math.hypot(v.x,v.y);
+    const sides=points.map((p,i)=>vec(p,points[(i+1)%4]));
+    const lengths=sides.map(len),scale=Math.max(...lengths,1);
+    const equal=(a,b)=>Math.abs(a-b)<=scale*.025;
+    const parallel=(a,b)=>Math.abs(a.x*b.y-a.y*b.x)<=Math.max(1,len(a)*len(b))*.025;
+    const right=(a,b)=>Math.abs(a.x*b.x+a.y*b.y)<=Math.max(1,len(a)*len(b))*.025;
+    const allEqual=equal(lengths[0],lengths[1])&&equal(lengths[1],lengths[2])&&equal(lengths[2],lengths[3]);
+    const bothParallel=parallel(sides[0],sides[2])&&parallel(sides[1],sides[3]);
+    if(allEqual&&right(sides[0],sides[1]))result.shape='square';
+    else if(bothParallel&&right(sides[0],sides[1]))result.shape='rectangle';
+    else if(allEqual&&bothParallel)result.shape='rhombus';
+    else if(bothParallel)result.shape='parallelogram';
+    else if(parallel(sides[0],sides[2])||parallel(sides[1],sides[3])){
+      const legs=parallel(sides[0],sides[2])?[lengths[1],lengths[3]]:[lengths[0],lengths[2]];
+      result.shape=equal(legs[0],legs[1])?'isotrapezoid':'trapezoid';
+    }else if((equal(lengths[0],lengths[1])&&equal(lengths[2],lengths[3]))||(equal(lengths[0],lengths[3])&&equal(lengths[1],lengths[2]))){
+      result.shape='kite';
+      result.axis=equal(lengths[0],lengths[1])?[1,3]:[0,2];
+    }
+    return result;
+  }
+
   function loadObjects(list,legacyPolygons=[],savedIntersections=[]){
     ensureLayer();
     // ensureLayer() is a no-op once the SVG already exists, so if the page dimensions
@@ -2190,7 +2220,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     }));
     source.forEach(data=>createObject(data.type||'polygon',data.points||[],{
       id:data.id,color:data.color,width:data.width,dashed:data.dashed,
-      labelIds:data.labelIds||[],meta:data.meta||{}
+      labelIds:data.labelIds||[],meta:inferQuadrilateralMeta(data.points,data.meta)
     }));
     selectedId=null;refreshSelection();
     loadIntersections(savedIntersections||[]);
@@ -2229,6 +2259,14 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     makeHandles(o);render(o);
   }
 
+  function setObjectPoints(o,nextPoints){
+    nextPoints.forEach((next,i)=>{
+      const current=o.points[i];
+      shiftAttachedLabels(o,next.x-current.x,next.y-current.y,i);
+      current.x=next.x;current.y=next.y;
+    });
+  }
+
   function makeHandles(o){
     o.handles=[];
     o.points.forEach((p,i)=>{
@@ -2259,6 +2297,55 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
           o.points[1]={x:np.x,y:o.points[0].y}; // horizontal radius handle
         }else if(o.type==='ellipse'&&i===2){
           o.points[2]={x:o.points[0].x,y:np.y}; // vertical radius handle
+        }else if(o.type==='polygon'&&o.points.length===4&&o.meta&&o.meta.shape==='square'){
+          // Keep a true square: the dragged corner and its opposite define a diagonal;
+          // the remaining corners are the two 90-degree rotations around its midpoint.
+          const oppI=(i+2)%4,n1i=(i+1)%4,n2i=(i+3)%4,opp=o.points[oppI];
+          const mid={x:(np.x+opp.x)/2,y:(np.y+opp.y)/2};
+          const half={x:(np.x-opp.x)/2,y:(np.y-opp.y)/2};
+          const c1={x:mid.x-half.y,y:mid.y+half.x},c2={x:mid.x+half.y,y:mid.y-half.x};
+          const keep=d(c1,o.points[n1i])+d(c2,o.points[n2i])<=d(c2,o.points[n1i])+d(c1,o.points[n2i]);
+          const next=o.points.map(p=>({...p}));next[i]=np;next[n1i]=keep?c1:c2;next[n2i]=keep?c2:c1;
+          setObjectPoints(o,next);
+        }else if(o.type==='polygon'&&o.points.length===4&&o.meta&&o.meta.shape==='rhombus'){
+          // Rhombus diagonals stay perpendicular and bisect each other.
+          const oppI=(i+2)%4,n1i=(i+1)%4,n2i=(i+3)%4,opp=o.points[oppI];
+          const mid={x:(np.x+opp.x)/2,y:(np.y+opp.y)/2};
+          const axis={x:np.x-opp.x,y:np.y-opp.y},L=Math.hypot(axis.x,axis.y)||1;
+          const halfOther=Math.max(12,d(o.points[n1i],o.points[n2i])/2);
+          const normal={x:-axis.y/L*halfOther,y:axis.x/L*halfOther};
+          const c1={x:mid.x+normal.x,y:mid.y+normal.y},c2={x:mid.x-normal.x,y:mid.y-normal.y};
+          const keep=d(c1,o.points[n1i])+d(c2,o.points[n2i])<=d(c2,o.points[n1i])+d(c1,o.points[n2i]);
+          const next=o.points.map(p=>({...p}));next[i]=np;next[n1i]=keep?c1:c2;next[n2i]=keep?c2:c1;
+          setObjectPoints(o,next);
+        }else if(o.type==='polygon'&&o.points.length===4&&o.meta&&o.meta.shape==='isotrapezoid'){
+          // Both bases remain parallel and centred on one symmetry axis, hence the legs
+          // remain equal after any corner is moved.
+          const mateI=i%2===0?i+1:i-1;
+          const other=[0,1,2,3].filter(k=>k!==i&&k!==mateI);
+          const axisX=(o.points[other[0]].x+o.points[other[1]].x)/2;
+          const next=o.points.map(p=>({...p}));next[i]=np;next[mateI]={x:2*axisX-np.x,y:np.y};
+          setObjectPoints(o,next);
+        }else if(o.type==='polygon'&&o.points.length===4&&o.meta&&o.meta.shape==='kite'){
+          const axisI=o.meta.axis||[1,3],offI=[0,1,2,3].filter(k=>!axisI.includes(k));
+          const next=o.points.map(p=>({...p}));
+          if(axisI.includes(i)){
+            const oldA=o.points[axisI[0]],oldB=o.points[axisI[1]],oldV=sub(oldB,oldA),oldL2=oldV.x*oldV.x+oldV.y*oldV.y||1;
+            const oldMid={x:(o.points[offI[0]].x+o.points[offI[1]].x)/2,y:(o.points[offI[0]].y+o.points[offI[1]].y)/2};
+            const t=((oldMid.x-oldA.x)*oldV.x+(oldMid.y-oldA.y)*oldV.y)/oldL2;
+            const halfWidth=Math.max(12,d(o.points[offI[0]],o.points[offI[1]])/2);
+            next[i]=np;
+            const A=next[axisI[0]],Bp=next[axisI[1]],v=sub(Bp,A),L=Math.hypot(v.x,v.y)||1;
+            const mid={x:A.x+v.x*t,y:A.y+v.y*t},normal={x:-v.y/L,y:v.x/L};
+            const sign=cross(oldV,sub(o.points[offI[0]],oldMid))>=0?1:-1;
+            next[offI[0]]={x:mid.x+normal.x*halfWidth*sign,y:mid.y+normal.y*halfWidth*sign};
+            next[offI[1]]={x:mid.x-normal.x*halfWidth*sign,y:mid.y-normal.y*halfWidth*sign};
+          }else{
+            const otherI=offI.find(k=>k!==i),A=o.points[axisI[0]],Bp=o.points[axisI[1]],v=sub(Bp,A),L2=v.x*v.x+v.y*v.y||1;
+            const t=((np.x-A.x)*v.x+(np.y-A.y)*v.y)/L2,q={x:A.x+v.x*t,y:A.y+v.y*t};
+            next[i]=np;next[otherI]={x:2*q.x-np.x,y:2*q.y-np.y};
+          }
+          setObjectPoints(o,next);
         }else if(o.type==='polygon'&&o.points.length===4&&o.meta&&o.meta.shape==='rectangle'){
           // Rectangle: dragging one corner only resizes the rectangle (keeps right angles).
           // The opposite corner stays fixed; each adjacent corner keeps sharing the axis
@@ -2412,6 +2499,12 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     if(s<1e-9)return{...A};
     return{x:(pb*A.x+pa*Bp.x)/s,y:(pb*A.y+pa*Bp.y)/s};
   }
+  function lineThroughPoint(P,A,Bp,perpendicular=false,half=240){
+    let dir=sub(Bp,A);
+    if(perpendicular)dir={x:-dir.y,y:dir.x};
+    const L=Math.hypot(dir.x,dir.y)||1,ux=dir.x/L,uy=dir.y/L;
+    return[{x:P.x-ux*half,y:P.y-uy*half},{x:P.x+ux*half,y:P.y+uy*half}];
+  }
   function distToSegment(p,a,b){
     const v=sub(b,a),L2=v.x*v.x+v.y*v.y;
     if(L2<1e-9)return d(p,a);
@@ -2487,7 +2580,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
         }
       }else if(o.meta&&o.meta.derived&&(o.meta.derived.kind==='altitude'||o.meta.derived.kind==='perp')){
         const line=resolveLineEndpoints(o.meta.derived.line);
-        const P=o.points[0];
+        const P=resolvePoint(o.meta.derived.point)||o.points[0];
         if(!line||!P)return;
         const foot=footOnLine(P,line.A,line.B);
         const info=angleDirsAndDeg(foot,P,line.B);
@@ -2781,19 +2874,23 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
       if(d(P,F)<3){toast('Точката вече лежи върху тази страна – изберете друга.');refreshSelection();return;}
       createObject('segment',[{x:P.x,y:P.y},F],{meta:{derived:{kind,point:{...pointRef},line:{...lineRef}}}});
     }else if(kind==='perp'||kind==='parallel'){
-      let dir=sub(line.B,line.A);
-      if(kind==='perp')dir={x:-dir.y,y:dir.x};
-      const L=Math.hypot(dir.x,dir.y)||1,ux=dir.x/L,uy=dir.y/L,half=200;
-      const pts=[{x:P.x-ux*half,y:P.y-uy*half},{x:P.x+ux*half,y:P.y+uy*half}];
+      const pts=lineThroughPoint(P,line.A,line.B,kind==='perp');
       createObject('line',pts,{meta:{derived:{kind,point:{...pointRef},line:{...lineRef}}}});
     }else return;
     B.pushHistory();
     toast('Построено: '+(CONSTRUCT_LABELS[kind]||kind)+'.');
     if(mode===kind)geoSpeech.textContent='Кликнете върху нова точка (връх), за да продължите построяването на '+(CONSTRUCT_LABELS[kind]||'')+'.';
+    refreshSelection();
   }
   function choosePointForConstruction(o,index){
     pendingConstructPoint={objId:o.id,index};
     selectedId=o.id;refreshSelection();
+    if((mode==='median'||mode==='altitude'||mode==='bisector')&&o.type==='polygon'&&o.points.length===3){
+      // In a triangle the opposite side is uniquely determined by the chosen vertex.
+      // Building immediately removes an error-prone second side-selection step.
+      buildDirectionalConstruction(mode,pendingConstructPoint,{objId:o.id,edgeIndex:(index+1)%3});
+      return;
+    }
     geoSpeech.textContent='Точката е избрана. Сега кликнете върху отсечка или страна.';
   }
   function chooseLineForConstruction(o,clickPoint){
@@ -2836,10 +2933,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
       else F=bisectorFoot(P,line.A,line.B);
       o.points=[{x:P.x,y:P.y},F];
     }else if(der.kind==='perp'||der.kind==='parallel'){
-      let dir=sub(line.B,line.A);
-      if(der.kind==='perp')dir={x:-dir.y,y:dir.x};
-      const L=Math.hypot(dir.x,dir.y)||1,ux=dir.x/L,uy=dir.y/L,half=200;
-      o.points=[{x:P.x-ux*half,y:P.y-uy*half},{x:P.x+ux*half,y:P.y+uy*half}];
+      o.points=lineThroughPoint(P,line.A,line.B,der.kind==='perp');
     }
   }
   function updateDerivedForObject(id){
@@ -3049,7 +3143,9 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
       geoSpeech.textContent='Кликнете върху отсечка или страна на фигура – ще построя точка в средата ѝ.';
     }else if(CONSTRUCT_POINT_KINDS.has(mode)){
       moveBtn.textContent='✥ Премести цял обект';editBtn.textContent='◆ Мести точка / връх';intersectionBtn.textContent='⊗ Пресечна точка';
-      geoSpeech.textContent='Кликнете върху цветна точка (връх) – тя определя откъде тръгва '+(CONSTRUCT_LABELS[mode]||'построението')+'. После кликнете върху отсечка или страна.';
+      geoSpeech.textContent=(mode==='median'||mode==='altitude'||mode==='bisector')
+        ?'Кликнете върху връх на триъгълника – '+(CONSTRUCT_LABELS[mode]||'построението')+'та към срещулежащата страна ще се построи автоматично.'
+        :'Кликнете върху цветна точка (връх), после върху отсечка или страна, спрямо която да построя '+(CONSTRUCT_LABELS[mode]||'линията')+'.';
     }else{
       moveBtn.textContent='✥ Премести цял обект';editBtn.textContent='◆ Мести точка / връх';intersectionBtn.textContent='⊗ Пресечна точка';
     }
