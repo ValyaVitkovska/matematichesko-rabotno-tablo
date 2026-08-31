@@ -1638,10 +1638,33 @@ function updateDraftPreview(){ensurePolygonLayer();if(previewPolyline){previewPo
     if(typeof clearAngleDraft==='function')clearAngleDraft();
     setAngleMarkingActive(t==='angle');
     B.setTool(t);
+    // Selecting a plain drawing tool must cancel any geometry-construction mode
+    // (move/point/intersection/median/altitude/…) - otherwise its button stays
+    // lit up alongside this one, and clicks on the canvas keep being routed to
+    // the stale construction instead of the tool just chosen. Do this BEFORE
+    // toggling moveRasterBtn below, since setMode('none') itself clears that
+    // same button's active class (it shares moveRasterBtn with the "raster"
+    // move tool) and would otherwise immediately undo the toggle.
+    if(window.GeometryEngine && window.GeometryEngine.setMode) window.GeometryEngine.setMode('none');
     document.querySelectorAll('[data-tool]').forEach(b=>b.classList.remove('active'));
     document.getElementById('moveRasterBtn').classList.toggle('active',t==='select');
     document.getElementById('angleBtn').classList.toggle('active',t==='angle');
     geoTip(t);
+  }
+  // Exposed so the geometry-construction toolbar (a separate script block, wired up
+  // further down) can cancel a still-armed "select" / "angle" tool when the user
+  // switches to a construction mode. Without this, customTool stayed set and its
+  // canvas pointerdown listener (registered with stopImmediatePropagation) kept
+  // swallowing every click meant for picking a vertex/side - silently blocking any
+  // further construction, and leaving that tool's button lit up alongside the
+  // construction button that was just activated.
+  function cancelCustomTool(){
+    if(!customTool)return;
+    customTool=null;anglePts=[];
+    if(typeof clearAngleDraft==='function')clearAngleDraft();
+    setAngleMarkingActive(false);
+    document.getElementById('moveRasterBtn').classList.remove('active');
+    document.getElementById('angleBtn').classList.remove('active');
   }
   document.getElementById('selectRegionBtn').addEventListener('click',()=>{customTool=null;if(window.GeometryEngine)window.GeometryEngine.toggleMoveMode();});
   document.getElementById('moveRasterBtn').addEventListener('click',()=>setCustomTool('select'));
@@ -1656,6 +1679,10 @@ function updateDraftPreview(){ensurePolygonLayer();if(previewPolyline){previewPo
       setAngleMarkingActive(false);
       document.getElementById('moveRasterBtn').classList.remove('active');
       document.getElementById('angleBtn').classList.remove('active');
+      // Same reason as in setCustomTool(): leaving a construction mode (e.g. "Медиана")
+      // engaged after switching to a drawing tool or a triangle/quadrilateral preset is
+      // what made several buttons look active at once and blocked further constructions.
+      if(window.GeometryEngine && window.GeometryEngine.setMode) window.GeometryEngine.setMode('none');
     });
   });
 
@@ -2006,7 +2033,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   });
 
   if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
-  window.BoardAddon={insertFloatingImage,flattenFloating,geoTip,createMovableLabel,serializeLabels,loadLabels,syncLabelsToPage,pageImagesWithLabels,addPolygonVertex,finishPolygon,serializePolygons,loadPolygons,createEditablePolygon,createLabeledEditablePolygon};
+  window.BoardAddon={insertFloatingImage,flattenFloating,geoTip,createMovableLabel,serializeLabels,loadLabels,syncLabelsToPage,pageImagesWithLabels,addPolygonVertex,finishPolygon,serializePolygons,loadPolygons,createEditablePolygon,createLabeledEditablePolygon,cancelCustomTool};
   loadLabels((B.getCurrentPage&&B.getCurrentPage().labels)||[]);
   loadPolygons((B.getCurrentPage&&B.getCurrentPage().polygons)||[]);
 })();
@@ -3124,6 +3151,13 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   }
 
   function setMode(next){
+    // Entering an actual construction/selection mode must cancel a still-armed
+    // "select" (raster move) or "angle" tool from the other toolbar - otherwise
+    // its canvas listener keeps swallowing clicks meant for this mode. Skip this
+    // when next is 'none': that's also how a drawing-tool switch clears a stale
+    // construction mode (see setCustomTool/[data-tool] handlers), and calling back
+    // into cancelCustomTool from there would just undo the tool it's activating.
+    if(next!=='none' && window.BoardAddon && window.BoardAddon.cancelCustomTool) window.BoardAddon.cancelCustomTool();
     mode=next;intersectionSelection=[];pendingConstructPoint=null;
     moveBtn.classList.toggle('active',mode==='move');
     editBtn.classList.toggle('active',mode==='point');
