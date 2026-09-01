@@ -241,7 +241,11 @@ body.endpoint-snapping .movable-label{pointer-events:none}
 .angle-draft-layer{pointer-events:none}
 .measure-label{font:italic 15px Georgia,'Times New Roman',serif;pointer-events:none;text-anchor:middle;dominant-baseline:middle;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
 .geometry-handle{
-  pointer-events:all;cursor:grab;fill:#14aeb4;stroke:#fff;stroke-width:2.5;
+  /* Sized and stroked to match .vertex-handle (the older freehand-polygon system's own
+     draggable points, r=11/stroke-width=4) - these were left smaller (r=6/2.5) when this
+     newer construction system was added, making every triangle/quad/circle/segment vertex
+     a noticeably harder target to grab, especially with a finger on a touch screen. */
+  pointer-events:all;cursor:grab;fill:#14aeb4;stroke:#fff;stroke-width:4;
   filter:drop-shadow(0 1px 2px rgba(0,0,0,.25));
 }
 .geometry-handle.center-handle{fill:#5b4bdb}
@@ -2320,7 +2324,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
       c.classList.add('geometry-handle');
       if((o.type==='circle'||o.type==='ellipse')&&i===0)c.classList.add('center-handle');
       if((o.type==='circle'||o.type==='ellipse')&&i>0)c.classList.add('radius-handle');
-      c.setAttribute('r','6');c.dataset.index=i;o.g.appendChild(c);o.handles.push(c);
+      c.setAttribute('r','11');c.dataset.index=i;o.g.appendChild(c);o.handles.push(c);
 
       let drag=false,last=null;
       c.addEventListener('pointerdown',e=>{
