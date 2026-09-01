@@ -760,6 +760,15 @@ function circleFromDrag(a,b){
 }
 
 canvas.addEventListener('pointerdown',e=>{
+  // While a geometry mode is engaged (Премести цял обект / Мести точка-връх / Пресечна
+  // точка / any construction), a click that misses the intended handle or shape falls
+  // straight through to this handler - and since the last-used freehand tool (often
+  // still "Молив" by default) never gets deselected just by entering one of those modes,
+  // that stray click used to start an actual pen stroke on the sheet. Nothing in this
+  // freehand-drawing handler is ever the intended action while such a mode is active, so
+  // skip it entirely and let GeometryEngine's own handles/shapes be the only thing a
+  // click there can do.
+  if(window.GeometryEngine && window.GeometryEngine.getMode && window.GeometryEngine.getMode()!=='none')return;
   const p=pos(e);
 
   if(activeSymbol){
@@ -934,7 +943,21 @@ document.getElementById('redoBtn').addEventListener('click',()=>{
   if(p.historyIndex<p.history.length-1){p.historyIndex++;applyHistoryState(p,p.history[p.historyIndex]);}
 });
 
+// Every preset button (triangle/quadrilateral) always drops its shape at the same
+// fixed, canvas-relative coordinates - it never replaces or nudges whatever is already
+// on the page. A second click on a preset (e.g. by accident while trying to grab a
+// vertex nearby) silently stacks a brand-new shape on top of the existing one instead
+// of doing nothing; if the user had left one vertex at its own original default spot,
+// the new shape's matching vertex lands on the exact same pixel, so it looks like that
+// one vertex "grew" a second, overlapping shape out of nowhere. Warn before adding a
+// preset shape whenever the page isn't empty, so this never happens silently.
+function confirmAddPresetShape(){
+  const existing=(window.GeometryEngine&&window.GeometryEngine.serializeObjects)?window.GeometryEngine.serializeObjects():[];
+  if(!existing.length)return true;
+  return confirm('На листа вече има фигура. Ще добавите нова фигура върху нея (старата няма да изчезне) - продължавате ли?');
+}
 function drawTriangleType(type){
+  if(!confirmAddPresetShape())return;
   // Convention: the first vertex (A) is always the bottom-left one, so students see a
   // consistent, predictable labeling regardless of triangle type.
   const w=canvas.width,h=canvas.height,cx=w/2,cy=h/2;
@@ -969,6 +992,7 @@ function drawTriangleType(type){
 document.querySelectorAll('[data-triangle]').forEach(b=>b.addEventListener('click',()=>drawTriangleType(b.dataset.triangle)));
 
 function drawQuad(type){
+  if(!confirmAddPresetShape())return;
   const w=canvas.width,h=canvas.height,cx=w/2,cy=h/2;
   let P=[];
   if(type==='square'){
@@ -3644,7 +3668,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
 
   window.GeometryEngine={
     serializeObjects,serializeIntersections,loadObjects,createObject,createLabeledPolygon,onToolChanged,
-    toggleMoveMode,togglePointMode,toggleIntersectionMode,toggleConstructMode,setMode,addPolygonVertex,finishPolygon,intersectObjects,
+    toggleMoveMode,togglePointMode,toggleIntersectionMode,toggleConstructMode,setMode,getMode:()=>mode,addPolygonVertex,finishPolygon,intersectObjects,
     buildTriangleCircle,buildTriangleMidpoints,setSnapToGrid
   };
 
