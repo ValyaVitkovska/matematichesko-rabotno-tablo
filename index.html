@@ -213,6 +213,15 @@ canvas{background:#fff;box-shadow:var(--shadow);touch-action:none;max-width:100%
 }
 .geometry-object.selected .geo-shape{filter:drop-shadow(0 0 2px rgba(91,75,219,.5))}
 .geometry-layer.picking-point .geo-shape{pointer-events:none}
+/* "Мести точка/връх" (point-edit mode): a click on a shape's own stroke here only ever
+   produces the "grab a colored point, not the shape's side" reminder - it never does
+   anything useful. But when a construction (median/altitude/bisector/perpendicular/
+   parallel) starts at a shared vertex, that construction's own line is drawn
+   on top of the original shape in the SVG, so its stroke can sit exactly over that
+   vertex's real, draggable handle and intercept the click meant for it - making the
+   handle effectively unreachable. Disabling shape strokes here lets every click fall
+   through straight to whichever handle is underneath. */
+.geometry-layer.point-editing .geo-shape{pointer-events:none}
 /* While the angle tool is active, every shape/handle must let clicks fall through to the
    canvas underneath (which does its own vertex/edge snapping) instead of triggering the
    normal click-to-select-and-drag behavior on the shape itself. */
@@ -2914,6 +2923,13 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
       const pts=lineThroughPoint(P,line.A,line.B,kind==='perp');
       createObject('line',pts,{meta:{derived:{kind,point:{...pointRef},line:{...lineRef}}}});
     }else return;
+    // createObject() always selects the shape it just made - here that's the new derived
+    // construction line, whose vertex handles can never be dragged (see the "derived" check
+    // in makeHandles' pointerdown). Left selected, its (visible but useless) handles are the
+    // ONLY ones shown in "Мести точка/връх" mode - the base shape's own, actually-draggable
+    // handles stay hidden until it is reselected. Re-selecting the base shape here keeps its
+    // vertices reachable right away, which is what someone continuing to edit the figure wants.
+    selectedId=pointRef.objId;
     B.pushHistory();
     toast('Построено: '+(CONSTRUCT_LABELS[kind]||kind)+'.');
     if(mode===kind)geoSpeech.textContent='Кликнете върху нова точка (връх), за да продължите построяването на '+(CONSTRUCT_LABELS[kind]||'')+'.';
@@ -3190,6 +3206,9 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     // another object's line (e.g. several constructions sharing the same vertex) always wins
     // the click - otherwise whichever shape happens to be topmost in the SVG can shadow it.
     if(svg)svg.classList.toggle('picking-point',showAllHandles&&!pendingConstructPoint);
+    // Same reasoning, but for plain "Мести точка/връх" editing: a construction's line can
+    // still cover the shared vertex's real handle there too (see the .point-editing CSS rule).
+    if(svg)svg.classList.toggle('point-editing',mode==='point');
     // Once the vertex is picked (or for "midpoint", which has no vertex step at all), the
     // shapes' own edges become the click target - highlight those brightly too, so the whole
     // median/altitude/bisector/perpendicular/parallel/midpoint flow stays easy to follow.
